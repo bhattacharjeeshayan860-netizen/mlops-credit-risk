@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pydantic
+pandas
+numpy
+scikit-learn
+xgboost
+mlflow
+evidently
+prometheus-client
+python-multipart
+pytest
+httpx
+joblib

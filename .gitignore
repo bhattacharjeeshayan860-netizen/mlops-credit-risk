@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local environment
+.env
+.env.*
+
+# Data and generated artifacts
+data/raw/*
+!data/raw/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+mlflow-db/*
+!mlflow-db/.gitkeep
+grafana-data/*
+!grafana-data/.gitkeep
+
+# MLflow local outputs
+mlruns/
+mlartifacts/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

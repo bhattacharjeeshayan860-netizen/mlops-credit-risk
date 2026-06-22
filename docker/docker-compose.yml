@@ -1,0 +1,47 @@
+# Local MLOps stack for the project.
+#
+# Planned services:
+# - fastapi-app: real-time inference API
+# - mlflow-server: experiment tracking and model registry
+# - prometheus: metrics scraper
+# - grafana: dashboard visualization
+
+services:
+  fastapi-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../artifacts:/app/artifacts
+    depends_on:
+      - mlflow-server
+
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.14.1
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../artifacts:/mlflow/artifacts
+      - ../mlflow-db:/mlflow/db
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:////mlflow/db/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../grafana-data:/var/lib/grafana
