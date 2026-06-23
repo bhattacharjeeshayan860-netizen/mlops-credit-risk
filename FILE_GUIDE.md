@@ -6,6 +6,11 @@ This guide explains what each file and folder is for.
 
 Stores the raw Kaggle dataset files before preprocessing. Raw data should not be modified directly.
 
+Expected local files:
+
+- `cs-training.csv`: training dataset from Kaggle
+- `Data Dictionary.xls`: feature descriptions provided with the dataset
+
 ## `notebooks/01_eda.ipynb`
 
 Exploratory data analysis notebook. This is where missing values, class imbalance, outliers, feature distributions, and baseline model behavior will be studied.

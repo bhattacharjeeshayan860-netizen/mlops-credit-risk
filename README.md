@@ -50,6 +50,11 @@ Dataset: [Give Me Some Credit - Kaggle](https://www.kaggle.com/c/GiveMeSomeCredi
 
 The dataset contains customer financial and credit-history features. The model predicts whether a customer is likely to experience serious delinquency within two years.
 
+Expected local raw files:
+
+- `data/raw/cs-training.csv`
+- `data/raw/Data Dictionary.xls`
+
 Key preprocessing decisions:
 
 - Impute missing `MonthlyIncome` with the training median
