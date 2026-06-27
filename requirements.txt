@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic
+python-dotenv
 pandas
 numpy
 scikit-learn
@@ -8,7 +9,13 @@ xgboost
 mlflow
 evidently
 prometheus-client
+prometheus-fastapi-instrumentator
 python-multipart
 pytest
 httpx
 joblib
+matplotlib
+seaborn
+jupyter
+ipykernel
+xlrd
