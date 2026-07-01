@@ -7,12 +7,12 @@ MLflow.
 """
 from pathlib import Path
 import json
-from typing import Any, cast
+
 import joblib
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, classification_report, confusion_matrix, roc_auc_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -29,9 +29,7 @@ def load_data() -> pd.DataFrame:
     return pd.read_csv(DATA_PATH)
 
 
-def split_data(
-    df: pd.DataFrame,
-):
+def split_data(df: pd.DataFrame):
     """Split the dataset into train, validation, and test sets."""
     X = df.drop(columns=[TARGET_COLUMN])
     y = df[TARGET_COLUMN]
@@ -53,45 +51,70 @@ def split_data(
     return X_train_raw, X_val_raw, X_test_raw, y_train, y_val, y_test
 
 
-def preprocess_data(
-    X_train_raw: pd.DataFrame,
-    X_val_raw: pd.DataFrame,
-    X_test_raw: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, CreditRiskPreprocessor]:
+def preprocess_data(X_train_raw: pd.DataFrame, X_val_raw: pd.DataFrame, X_test_raw: pd.DataFrame):
     """Fit preprocessing on train data and transform all splits."""
     preprocessor = CreditRiskPreprocessor(clip_quantile=0.99)
-    X_train = cast(pd.DataFrame, preprocessor.fit_transform(X_train_raw))
-    X_val = cast(pd.DataFrame, preprocessor.transform(X_val_raw))
-    X_test = cast(pd.DataFrame, preprocessor.transform(X_test_raw))
+    preprocessor.fit(X_train_raw)
+    X_train = preprocessor.transform(X_train_raw)
+    X_val = preprocessor.transform(X_val_raw)
+    X_test = preprocessor.transform(X_test_raw)
 
     return X_train, X_val, X_test, preprocessor
 
 
-def train_model(X_train: Any, y_train: pd.Series) -> Pipeline:
-    """Train a logistic regression baseline on the preprocessed training data."""
-    model = Pipeline(
-        steps=[
-            ("scaler", StandardScaler()),
-            (
-                "classifier",
-                LogisticRegression(
-                    class_weight="balanced",
-                    max_iter=1000,
-                    random_state=RANDOM_STATE,
-                ),
-            ),
-        ]
+def build_model() -> Pipeline:
+    """Create the baseline logistic regression model."""
+    model = Pipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("classifier", LogisticRegression(class_weight="balanced", max_iter=1000, random_state=RANDOM_STATE)),
+    ])
+    return model
+
+
+def build_cv_pipeline() -> Pipeline:
+    """Create a full preprocessing + model pipeline for cross-validation."""
+    model = Pipeline(steps=[
+        ("preprocessor", CreditRiskPreprocessor(clip_quantile=0.99)),
+        ("scaler", StandardScaler()),
+        ("classifier", LogisticRegression(class_weight="balanced", max_iter=1000, random_state=RANDOM_STATE)),
+    ])
+    return model
+
+
+def run_cross_validation(X_train_raw: pd.DataFrame, y_train: pd.Series) -> dict:
+    """Run cross-validation on the training split only."""
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    scores = cross_validate(
+        build_cv_pipeline(),
+        X_train_raw,
+        y_train,
+        cv=cv,
+        scoring=["roc_auc", "average_precision"],
+        n_jobs=-1,
     )
+
+    metrics = {
+        "roc_auc_mean": float(scores["test_roc_auc"].mean()),
+        "roc_auc_std": float(scores["test_roc_auc"].std()),
+        "average_precision_mean": float(scores["test_average_precision"].mean()),
+        "average_precision_std": float(scores["test_average_precision"].std()),
+    }
+
+    print("\nCROSS-VALIDATION METRICS")
+    print(f"ROC-AUC: {metrics['roc_auc_mean']:.4f} +/- {metrics['roc_auc_std']:.4f}")
+    print(f"PR-AUC:  {metrics['average_precision_mean']:.4f} +/- {metrics['average_precision_std']:.4f}")
+
+    return metrics
+
+
+def train_model(X_train: pd.DataFrame, y_train: pd.Series) -> Pipeline:
+    """Train a logistic regression baseline on the preprocessed training data."""
+    model = build_model()
     model.fit(X_train, y_train)
     return model
 
 
-def evaluate_model(
-    model,
-    X: pd.DataFrame,
-    y: pd.Series,
-    split_name: str,
-) -> dict:
+def evaluate_model(model, X: pd.DataFrame, y: pd.Series, split_name: str) -> dict:
     """Evaluate a classifier and return JSON-serializable metrics."""
     y_prob = model.predict_proba(X)[:, 1]
     y_pred = model.predict(X)
@@ -114,12 +137,7 @@ def evaluate_model(
     return metrics
 
 
-def save_artifacts(
-    model,
-    preprocessor: CreditRiskPreprocessor,
-    X_train: pd.DataFrame,
-    metrics: dict,
-) -> None:
+def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.DataFrame, metrics: dict) -> None:
     """Save model, preprocessor, reference data, and metrics."""
     ARTIFACTS_DIR.mkdir(exist_ok=True)
 
@@ -139,6 +157,7 @@ def main() -> None:
     df = load_data()
 
     X_train_raw, X_val_raw, X_test_raw, y_train, y_val, y_test = split_data(df)
+    cv_metrics = run_cross_validation(X_train_raw, y_train)
 
     X_train, X_val, X_test, preprocessor = preprocess_data(
         X_train_raw,
@@ -152,6 +171,7 @@ def main() -> None:
     test_metrics = evaluate_model(model, X_test, y_test, "test")
 
     metrics = {
+        "cross_validation": cv_metrics,
         "validation": val_metrics,
         "test": test_metrics,
     }
