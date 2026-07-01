@@ -1,8 +1,20 @@
 """Tests for leakage-safe credit-risk preprocessing."""
 
+from typing import Any, cast
+
 import pandas as pd
 
 from src.preprocessing import CreditRiskPreprocessor
+
+
+def _row_as_dict(df: pd.DataFrame, row_index: int) -> dict[str, Any]:
+    """Return one DataFrame row as a plain dict for type-checker-friendly asserts."""
+    return cast(dict[str, Any], df.loc[row_index].to_dict())
+
+
+def _as_float(value: Any) -> float:
+    """Convert a numeric test value to float."""
+    return float(cast(int | float, value))
 
 
 def test_preprocessor_imputes_and_adds_expected_features() -> None:
@@ -25,15 +37,16 @@ def test_preprocessor_imputes_and_adds_expected_features() -> None:
 
     preprocessor = CreditRiskPreprocessor().fit(raw)
     cleaned = preprocessor.transform(raw)
+    row = _row_as_dict(cleaned, 1)
 
     assert "Unnamed: 0" not in cleaned.columns
     assert "SeriousDlqin2yrs" not in cleaned.columns
-    assert cleaned.isna().sum().sum() == 0
-    assert cleaned.loc[1, "MonthlyIncomeWasMissing"] == 1
-    assert cleaned.loc[1, "NumberOfDependentsWasMissing"] == 1
-    assert cleaned.loc[1, "AgeWasInvalid"] == 1
-    assert cleaned.loc[1, "PastDueExtremeCode"] == 1
-    assert cleaned.loc[1, "NumberOfTimes90DaysLate"] < 90
+    assert int(cleaned.isna().sum().sum()) == 0
+    assert _as_float(row["MonthlyIncomeWasMissing"]) == 1
+    assert _as_float(row["NumberOfDependentsWasMissing"]) == 1
+    assert _as_float(row["AgeWasInvalid"]) == 1
+    assert _as_float(row["PastDueExtremeCode"]) == 1
+    assert _as_float(row["NumberOfTimes90DaysLate"]) < 90
 
 
 def test_preprocessor_preserves_feature_order_for_new_data() -> None:

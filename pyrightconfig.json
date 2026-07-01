@@ -1,0 +1,17 @@
+{
+  "venvPath": ".",
+  "venv": ".conda",
+  "include": [
+    "api",
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    ".conda",
+    ".git",
+    "**/__pycache__"
+  ],
+  "extraPaths": [
+    "."
+  ]
+}
