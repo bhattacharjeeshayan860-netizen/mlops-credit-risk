@@ -54,7 +54,7 @@ def split_data(df: pd.DataFrame):
 def preprocess_data(X_train_raw: pd.DataFrame, X_val_raw: pd.DataFrame, X_test_raw: pd.DataFrame):
     """Fit preprocessing on train data and transform all splits."""
     preprocessor = CreditRiskPreprocessor(clip_quantile=0.99)
-    preprocessor.fit(X_train_raw)
+    preprocessor.fit_transform(X_train_raw)
     X_train = preprocessor.transform(X_train_raw)
     X_val = preprocessor.transform(X_val_raw)
     X_test = preprocessor.transform(X_test_raw)
