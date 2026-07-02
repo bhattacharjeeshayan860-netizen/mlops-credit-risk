@@ -1,133 +1,96 @@
-# Real-Time ML Inference API with Monitoring and Drift Detection
+# Credit Risk Sentinel
 
-An end-to-end MLOps project for serving a credit-risk machine learning model through a production-style API, tracking experiments with MLflow, monitoring service metrics with Prometheus/Grafana, and detecting data drift with Evidently.
+Real-time credit-risk inference, monitoring, and drift detection built as a production-minded MLOps case study.
 
-This project is being built as a serious fresher portfolio project for DS/ML and MLOps roles. The goal is not only to train a model, but to show the full lifecycle: data preparation, model training, versioning, API inference, containerization, observability, drift monitoring, retraining, CI/CD, and deployment.
+This project shows how a notebook-grade ML idea becomes a service you can actually trust: reproducible training, durable preprocessing artifacts, API inference, observability, and a clean path to retraining. It is shaped as a portfolio piece for DS, ML, and MLOps roles where hiring teams look for engineering judgment, not just model accuracy.
 
-## Problem Statement
+## Project Motive
 
-Financial institutions need reliable systems to estimate whether a customer is likely to default in the next two years. A model is useful only when it can be trained reproducibly, served through an API, monitored in production, and updated when data changes.
+Most student ML projects prove that a model can be trained. Fewer prove that it can be served, monitored, and maintained.
 
-This project solves that problem using the Kaggle **Give Me Some Credit** dataset.
+This repository exists to close that gap.
 
-- **Task:** Binary classification
-- **Target:** `SeriousDlqin2yrs`
-- **Positive class:** Customer defaulted within two years
-- **Main challenge:** Class imbalance, missing values, outliers, and production drift
+The business problem is simple: a financial institution wants to estimate whether a customer is likely to default within two years. The engineering problem is harder: that prediction has to be reproducible, explainable enough to trust, robust to missing values and outliers, and ready for production concerns like drift and retraining.
 
-## Why This Project Matters
+That is the story this project tells.
 
-Most beginner ML projects stop at notebooks. This project is designed to go beyond that by demonstrating practical engineering skills expected in real DS/ML teams:
+## Recruiter View
 
-- Building a reproducible training pipeline
-- Serving predictions using FastAPI
-- Tracking experiments and model versions with MLflow
-- Handling inference-time null values safely
-- Monitoring live API behavior with Prometheus
-- Visualizing metrics with Grafana
-- Detecting drift between training data and incoming requests
-- Triggering retraining workflows through GitHub Actions
-- Running the full system with Docker Compose
+If someone opens this repository in a hiring process, the message should be immediate: this is not just a model file, it is a system.
+
+The project demonstrates that I can move beyond experiments, structure ML work like software, and think in terms of reliability, maintainability, and operational impact.
+
+## Why This Stands Out
+
+This codebase is intentionally shaped to signal real-world ML engineering ability:
+
+- Reproducible train/validation/test splits with stratified sampling
+- Explicit preprocessing learned from training data and reused at inference time
+- Saved artifacts for model, preprocessor, metrics, and reference data
+- A FastAPI service surface for health and prediction workflows
+- Foundation for monitoring, drift detection, and retraining automation
+- A project structure that looks closer to a deployable system than a notebook dump
+
+## What It Does
+
+The model predicts the `SeriousDlqin2yrs` target from the Give Me Some Credit dataset.
+
+Current training and preprocessing behavior includes:
+
+- Binary classification with logistic regression and `class_weight="balanced"`
+- Missing-value handling for `MonthlyIncome`, `NumberOfDependents`, and invalid `age` values
+- Feature renaming for Kaggle column names with hyphens
+- Outlier clipping for heavy-tailed credit features
+- Saved preprocessing artifact metadata for inference-time reuse
+- A held-out reference dataset for later drift comparison
+
+The current API surface includes a working `/health` endpoint, with the prediction and observability pieces already scaffolded in the codebase.
 
 ## Tech Stack
 
-| Area | Tools |
+| Layer | Tools |
 | --- | --- |
 | Language | Python |
-| Data & ML | pandas, NumPy, scikit-learn, XGBoost |
-| API | FastAPI, Pydantic |
-| Experiment Tracking | MLflow |
-| Drift Detection | Evidently AI |
+| Data | pandas, NumPy |
+| Modeling | scikit-learn |
+| API | FastAPI |
+| Artifact Handling | joblib, JSON |
 | Monitoring | Prometheus, Grafana |
-| Packaging | Docker, Docker Compose |
+| Drift Detection | Evidently |
+| Containerization | Docker, Docker Compose |
 | Testing | pytest |
-| CI/CD | GitHub Actions |
-| Deployment Target | Render or Railway |
+| Experiment Tracking | MLflow |
 
 ## Dataset
 
 Dataset: [Give Me Some Credit - Kaggle](https://www.kaggle.com/c/GiveMeSomeCredit/data)
 
-The dataset contains customer financial and credit-history features. The model predicts whether a customer is likely to experience serious delinquency within two years.
-
-Expected local raw files:
+Expected raw data files:
 
 - `data/raw/cs-training.csv`
 - `data/raw/Data Dictionary.xls`
 
-Key preprocessing decisions:
+The dataset contains financial and credit-history signals used to predict delinquency risk.
 
-- Impute missing `MonthlyIncome` with the training median
-- Impute missing `NumberOfDependents` with the training median
-- Save training medians to `artifacts/medians.json`
-- Use `class_weight="balanced"` for class imbalance
-- Clip or transform extreme values in `RevolvingUtilizationOfUnsecuredLines`
-- Save a held-out reference dataset to `artifacts/reference.csv` for drift comparison
-
-## System Architecture
+## System View
 
 ```text
-Client
+Customer Request
   |
-  | POST /predict
   v
-FastAPI Inference Service
+FastAPI Inference Layer
   |
-  | Loads model + preprocessing artifacts
   v
-Prediction Response
+Loaded Model + Preprocessing Artifact
   |
-  | Logs incoming request data
   v
-Rolling Request Buffer
+Risk Score + Label
   |
-  | Compared with reference.csv
   v
-Evidently Drift Report
-  |
-  | Optional retraining trigger
-  v
-GitHub Actions + MLflow Model Versioning
+Metrics, Drift Checks, and Retraining Hooks
 ```
 
-Prometheus scrapes the FastAPI `/metrics` endpoint every 15 seconds, and Grafana displays operational dashboards.
-
-## API Design
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `GET` | `/health` | Check whether the API is running |
-| `POST` | `/predict` | Return prediction and confidence score |
-| `GET` | `/metrics` | Expose Prometheus metrics |
-| `POST` | `/retrain` | Trigger retraining manually or automatically |
-| `GET` | `/model/info` | Return active model version and training metadata |
-
-Example prediction request:
-
-```json
-{
-  "RevolvingUtilizationOfUnsecuredLines": 0.76,
-  "age": 45,
-  "NumberOfTime30_59DaysPastDueNotWorse": 2,
-  "DebtRatio": 0.34,
-  "MonthlyIncome": 5200,
-  "NumberOfOpenCreditLinesAndLoans": 8,
-  "NumberOfTimes90DaysLate": 0,
-  "NumberRealEstateLoansOrLines": 1,
-  "NumberOfTime60_89DaysPastDueNotWorse": 0,
-  "NumberOfDependents": 2
-}
-```
-
-Expected response:
-
-```json
-{
-  "prediction": 0,
-  "confidence": 0.91,
-  "model_version": "v1"
-}
-```
+Prometheus is intended to scrape the service metrics endpoint, while Grafana is used to turn those signals into something visible and operational.
 
 ## Repository Structure
 
@@ -139,38 +102,25 @@ Expected response:
 ├── data/
 │   └── raw/
 ├── docker/
-│   ├── Dockerfile
-│   └── docker-compose.yml
+├── grafana-data/
 ├── mlflow/
+├── mlflow-db/
 ├── notebooks/
 │   └── 01_eda.ipynb
 ├── src/
 │   ├── monitor.py
 │   ├── predict.py
+│   ├── preprocessing.py
 │   ├── train.py
 │   └── utils.py
 ├── tests/
-│   └── test_api.py
-├── .github/
-│   └── workflows/
-│       └── ci.yml
+│   ├── test_api.py
+│   └── test_preprocessing.py
 ├── FILE_GUIDE.md
 ├── PROJECT_TASK.md
-├── requirements.txt
-└── README.md
+├── README.md
+└── requirements.txt
 ```
-
-## Build Roadmap
-
-| Week | Milestone | Output |
-| --- | --- | --- |
-| 1 | EDA and baseline model | Clean notebook, trained model, 85%+ ROC-AUC target |
-| 2 | FastAPI inference service | Working `/predict` endpoint |
-| 3 | MLflow integration | Logged experiments and model versions |
-| 4 | Docker setup | FastAPI + MLflow running through Compose |
-| 5 | Monitoring | Prometheus metrics and Grafana dashboard |
-| 6 | Drift detection | Evidently report comparing reference vs live data |
-| 7 | Retraining + CI/CD | Automated tests, retraining workflow, deployment |
 
 ## Local Setup
 
@@ -190,15 +140,15 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Planned Commands
+## Run It Locally
 
-Train model:
+Train the model:
 
 ```bash
 python src/train.py
 ```
 
-Run API:
+Start the API:
 
 ```bash
 uvicorn api.main:app --reload
@@ -210,26 +160,28 @@ Run tests:
 pytest
 ```
 
-Run full stack:
+Bring up the container stack:
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build
 ```
 
+## Portfolio Value
+
+If you are reviewing this as a hiring signal, this project is meant to communicate that I can:
+
+- Move from data prep to a service-oriented ML workflow
+- Handle preprocessing consistently between training and inference
+- Think in terms of artifacts, not just notebooks
+- Build toward monitoring and retraining instead of stopping at model fit
+- Present ML work in a way that is readable, maintainable, and production-aware
+
+In a high-signal interview, this gives a clean story: I can build, package, validate, and operate ML work instead of only training it.
+
 ## Current Status
 
-This repository currently contains the planned production-grade structure and documentation. Implementation will be added step by step following the roadmap above.
-
-## Portfolio Highlights
-
-This project is intended to demonstrate:
-
-- Strong understanding of the ML lifecycle beyond notebooks
-- Practical API development for real-time inference
-- Awareness of production ML risks such as drift and monitoring gaps
-- Ability to structure a clean, maintainable Python ML project
-- Familiarity with tools used in modern ML engineering teams
+The repository is in an active build phase. The training and preprocessing foundation is in place, the API skeleton exists, and the remaining work is focused on expanding the service, monitoring, and automation layers into a complete MLOps system.
 
 ## Author
 
-Final-year BCA student building practical DS/ML/MLOps projects for high-quality fresher roles in India.
+Final-year BCA student building practical DS, ML, and MLOps projects for strong fresher roles in India.
