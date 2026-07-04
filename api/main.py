@@ -7,8 +7,24 @@ Planned endpoints:
 - POST /retrain: manual or automated retraining trigger
 - GET /model/info: active model metadata
 """
-
+from pydantic import BaseModel
+from typing import Optional
 from fastapi import FastAPI
+from src.predict import make_prediction
+
+class PredictionRequest(BaseModel):
+    """Request model for input data."""
+    # Define the expected fields for the prediction request    
+    RevolvingUtilizationOfUnsecuredLines: float
+    age: int
+    NumberOfTime30_59DaysPastDueNotWorse: int
+    DebtRatio: float
+    MonthlyIncome: Optional[float]= None
+    NumberOfOpenCreditLinesAndLoans: int
+    NumberOfTimes90DaysLate: int
+    NumberRealEstateLoansOrLines: int
+    NumberOfTime60_89DaysPastDueNotWorse: int
+    NumberOfDependents : Optional[float]= None
 
 
 app = FastAPI(
@@ -17,6 +33,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
+@app.post("/predict")
+def predict(request: PredictionRequest)-> dict:
+    """Return the object (predictionRequest) as a dictionary."""
+    prediction_input= request.model_dump()
+    result= make_prediction(prediction_input)
+    return result
+    
 
 @app.get("/health")
 def health() -> dict[str, str]:

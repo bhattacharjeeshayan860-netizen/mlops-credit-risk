@@ -46,10 +46,10 @@ def make_prediction(input_data: dict) -> dict:
     default_probability= model.predict_proba(X)[:, 1]
     default_probability= float(default_probability[0])
     
-    if default_probability > DEFAULT_THRESHOLD:
+    if default_probability >= DEFAULT_THRESHOLD:
         prediction = 1
-        risk_label= "High Risk"
+        risk_label= "high_risk"
     else:
         prediction = 0
-        risk_label= "Low Risk"
-    return {"prediction": int(prediction), "default_probability": default_probability, "risk_label": risk_label} 
+        risk_label= "low_risk"
+    return {"prediction": int(prediction), "default_probability": f"{default_probability:.4f}", "risk_label": risk_label} 
