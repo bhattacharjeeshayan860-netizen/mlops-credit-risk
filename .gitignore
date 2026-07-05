@@ -34,3 +34,6 @@ mlartifacts/
 Thumbs.db
 .idea/
 .vscode/
+
+# Opencode local progress tracking (not for git)
+.opencode/

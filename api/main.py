@@ -10,7 +10,9 @@ Planned endpoints:
 from pydantic import BaseModel
 from typing import Optional
 from fastapi import FastAPI
-from src.predict import make_prediction
+from prometheus_client import Counter, Histogram
+from prometheus_fastapi_instrumentator import Instrumentator
+from src.predict import make_prediction, load_model_info
 
 class PredictionRequest(BaseModel):
     """Request model for input data."""
@@ -39,7 +41,15 @@ def predict(request: PredictionRequest)-> dict:
     prediction_input= request.model_dump()
     result= make_prediction(prediction_input)
     return result
-    
+
+@app.get("/model/info")
+def model_info()-> dict:
+    """Return active model metadata."""
+    result= load_model_info()
+    if result:
+        return result 
+    raise ValueError("Model info does not exist.")
+
 
 @app.get("/health")
 def health() -> dict[str, str]:

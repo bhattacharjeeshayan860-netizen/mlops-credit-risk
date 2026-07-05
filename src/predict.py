@@ -4,6 +4,7 @@ This module will load the trained model and preprocessing artifacts from
 `artifacts/`, apply inference-time preprocessing, impute nullable fields using
 training medians, and return prediction probabilities.
 """
+import json
 from pathlib import Path
 import joblib
 import pandas as pd
@@ -11,6 +12,7 @@ import pandas as pd
 PROJECT_ROOT =Path(__file__).resolve().parents[1]
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 MODEL_PATH= ARTIFACTS_DIR / "model.pkl"
+MODEL_META_DATA= ARTIFACTS_DIR / "model_info.json"
 PREPROCESSOR_PATH = ARTIFACTS_DIR / "preprocessor.pkl"
 DEFAULT_THRESHOLD = 0.5
 
@@ -33,7 +35,13 @@ def prepare_input(input_data: dict)-> pd.DataFrame:
     if df.empty:
         raise ValueError("Input data is empty.")
     return df
-
+def load_model_info():
+    """Load model metadata from artifacts."""
+    if not Path(MODEL_META_DATA).exists():
+        raise ValueError("Model info does not exist.")
+    with open(MODEL_META_DATA, "r", encoding="utf-8") as f:
+        model_info= json.load(f)
+    return model_info
 
 
 def make_prediction(input_data: dict) -> dict:
@@ -52,4 +60,4 @@ def make_prediction(input_data: dict) -> dict:
     else:
         prediction = 0
         risk_label= "low_risk"
-    return {"prediction": int(prediction), "default_probability": f"{default_probability:.4f}", "risk_label": risk_label} 
+    return {"prediction": int(prediction), "default_probability": f"{default_probability:.4f}", "risk_label": risk_label,} 

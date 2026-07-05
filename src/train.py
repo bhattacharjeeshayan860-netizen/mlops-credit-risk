@@ -7,6 +7,7 @@ MLflow.
 """
 from pathlib import Path
 import json
+from datetime import datetime
 
 import joblib
 import pandas as pd
@@ -150,6 +151,15 @@ def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.Data
 
     with open(ARTIFACTS_DIR / "preprocessing_artifact.json", "w", encoding="utf-8") as f:
         json.dump(preprocessor.get_artifact().to_dict(), f, indent=4)
+    with open(ARTIFACTS_DIR / "model_info.json", "w", encoding="utf-8") as f:
+        json.dump({
+            "model_type": (model.named_steps["classifier"].__class__.__name__),
+            "version": "0.1.0",
+            "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "roc_auc": metrics["test"]["roc_auc"],
+            "average_precision": metrics["test"]["average_precision"],
+        },f, indent=4)
+    
 
 
 def main() -> None:
