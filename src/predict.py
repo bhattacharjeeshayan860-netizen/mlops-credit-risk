@@ -60,4 +60,4 @@ def make_prediction(input_data: dict) -> dict:
     else:
         prediction = 0
         risk_label= "low_risk"
-    return {"prediction": int(prediction), "default_probability": f"{default_probability:.4f}", "risk_label": risk_label,} 
+    return {"prediction": int(prediction), "default_probability": default_probability, "risk_label": risk_label,} 

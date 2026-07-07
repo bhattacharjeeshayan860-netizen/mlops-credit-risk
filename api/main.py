@@ -28,6 +28,15 @@ class PredictionRequest(BaseModel):
     NumberOfTime60_89DaysPastDueNotWorse: int
     NumberOfDependents : Optional[float]= None
 
+PREDICTION_COUNT = Counter(
+                            "api_prediction_requests_total",
+                            "credit_risk_prediction_total",
+                            ["risk_label"]
+)
+PREDICTION_HISTOGRAM = Histogram("credit_default_probability",
+                                "Distribution of predicted credit default probabilities",
+                                buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+
 
 app = FastAPI(
     title="Real-Time ML Inference API",
@@ -35,11 +44,15 @@ app = FastAPI(
     version="0.1.0",
 )
 
+Instrumentator().instrument(app).expose(app)
+
 @app.post("/predict")
 def predict(request: PredictionRequest)-> dict:
     """Return the object (predictionRequest) as a dictionary."""
     prediction_input= request.model_dump()
     result= make_prediction(prediction_input)
+    PREDICTION_COUNT.labels(risk_label=result["risk_label"]).inc()
+    PREDICTION_HISTOGRAM.observe(result["default_probability"])
     return result
 
 @app.get("/model/info")
