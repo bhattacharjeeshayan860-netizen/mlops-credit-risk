@@ -7,8 +7,7 @@ MLflow.
 """
 from pathlib import Path
 import json
-from datetime import datetime
-
+from datetime import date, datetime, time
 import joblib
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -16,8 +15,14 @@ from sklearn.metrics import average_precision_score, classification_report, conf
 from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-
+import mlflow
+import mlflow.sklearn
+import logging
 from src.preprocessing import CreditRiskPreprocessor, TARGET_COLUMN
+from src.utils import (MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME, MLFLOW_ARTIFACT_PATH)
+
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
@@ -138,7 +143,7 @@ def evaluate_model(model, X: pd.DataFrame, y: pd.Series, split_name: str) -> dic
     return metrics
 
 
-def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.DataFrame, metrics: dict) -> None:
+def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.DataFrame,run_id: str, metrics: dict) -> None:
     """Save model, preprocessor, reference data, and metrics."""
     ARTIFACTS_DIR.mkdir(exist_ok=True)
 
@@ -153,10 +158,10 @@ def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.Data
         json.dump(preprocessor.get_artifact().to_dict(), f, indent=4)
     with open(ARTIFACTS_DIR / "model_info.json", "w", encoding="utf-8") as f:
         json.dump({
-            "model_type": (model.named_steps["classifier"
-            ""].__class__.__name__),
+            "model_type": model.named_steps["classifier"].__class__.__name__,
             "version": "0.1.0",
             "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "mlflow_run_id": run_id,
             "roc_auc": metrics["test"]["roc_auc"],
             "average_precision": metrics["test"]["average_precision"],
         },f, indent=4)
@@ -165,30 +170,43 @@ def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.Data
 
 def main() -> None:
     """Run the full training pipeline."""
-    df = load_data()
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
-    X_train_raw, X_val_raw, X_test_raw, y_train, y_val, y_test = split_data(df)
-    cv_metrics = run_cross_validation(X_train_raw, y_train)
+    with mlflow.start_run():
+        df=load_data()
+        mlflow.set_tag("dataset", "Give Me Some Credit")
+        X_train_raw, X_val_raw,X_test_raw, y_train, y_val, y_test= split_data(df)
+        cv_metrics= run_cross_validation(X_train_raw, y_train)
+        mlflow.log_metrics({f"cv_{k}":v for k,v in cv_metrics.items()})
 
-    X_train, X_val, X_test, preprocessor = preprocess_data(
-        X_train_raw,
-        X_val_raw,
-        X_test_raw,
-    )
+        X_train, X_val, X_test, preprocessor= preprocess_data(X_train_raw, X_val_raw, X_test_raw)
+        start=time.perf_counter()
+        model=train_model(X_train, y_train)
+        train_time=time.perf_counter()-start
 
-    model = train_model(X_train, y_train)
+        mlflow.log_param("model_type", type(model.named_steps["classifier"]).__name__)
+        mlflow.log_params(model.named_steps["classifier"].get_params())
+        mlflow.log_param("train_time", train_time)
 
-    val_metrics = evaluate_model(model, X_val, y_val, "validation")
-    test_metrics = evaluate_model(model, X_test, y_test, "test")
-
-    metrics = {
-        "cross_validation": cv_metrics,
-        "validation": val_metrics,
-        "test": test_metrics,
-    }
-
-    save_artifacts(model, preprocessor, X_train, metrics)
-
-
+        mlflow.sklearn.log_model(sk_model=model,
+                                 artifact_path=MLFLOW_ARTIFACT_PATH,
+                                 registered_model_name="credit_risk_model")
+        
+        val_metrics=evaluate_model(model, X_val, y_val, split_name="validation")
+        test_metrics=evaluate_model(model,X_test, y_test, split_name="test")
+        mlflow.log_metrics({
+            "val_roc_auc": val_metrics["roc_auc"],
+            "val_average_precision": val_metrics["average_precision"],
+            "test_roc_auc": test_metrics["roc_auc"],
+            "test_average_precision": test_metrics["average_precision"],
+        })
+        run_id=mlflow.active_run().info.run_id
+        save_artifacts(model,preprocessor, X_train,run_id,
+                       {"cross_validation":cv_metrics,
+                        "validation":val_metrics,
+                        "test":test_metrics
+                       })
+        mlflow.log_artifact("artifacts/model_info.json", artifact_path="model_info")
 if __name__ == "__main__":
     main()

@@ -1,13 +1,17 @@
 {
   "venvPath": ".",
   "venv": ".conda",
+  "typeCheckingMode": "basic",
+  "stubPath": "typings",
+  "reportAttributeAccessIssue": "none",
+  "reportReturnType": "none",
   "include": [
     "api",
     "src",
     "tests"
   ],
   "exclude": [
-    ".conda",
+  ".conda",
     ".git",
     "**/__pycache__"
   ],
