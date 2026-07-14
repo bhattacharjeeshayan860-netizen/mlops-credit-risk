@@ -18,7 +18,7 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 
 from src.preprocessing import CreditRiskPreprocessor
-from src.utils import FEATURE_COLUMNS, MLFLOW_ARTIFACT_PATH, MLFLOW_EXPERIMENT_NAME, MLFLOW_TRACKING_URI
+from src.utils import MLFLOW_ARTIFACT_PATH, MLFLOW_EXPERIMENT_NAME, MLFLOW_TRACKING_URI
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def load_preprocessor_from_mlflow(run_id: str | None = None) -> CreditRiskPrepro
     """Load the fitted preprocessor from MLflow artifacts."""
     if run_id is None:
         run_id = get_latest_run_id()
-    local_dir = mlflow.artifacts.download_artifacts(f"runs:/{run_id}/Preprocessor")
+    local_dir = mlflow.artifacts.download_artifacts(f"runs:/{run_id}/preprocessor")
     return joblib.load(Path(local_dir) / "preprocessor.pkl")
 
 

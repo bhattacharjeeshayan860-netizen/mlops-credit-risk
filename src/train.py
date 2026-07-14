@@ -5,9 +5,16 @@ load data, preprocess features, train a classifier, evaluate ROC-AUC, save the
 model, save preprocessing medians, save a reference dataset, and log results to
 MLflow.
 """
+import io
+import sys
 from pathlib import Path
 import json
-from datetime import date, datetime, time
+from datetime import datetime
+import time
+
+# Force UTF-8 stdout on Windows so MLflow's emoji logs don't crash with cp1252.
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+
 import joblib
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -165,6 +172,11 @@ def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.Data
             "roc_auc": metrics["test"]["roc_auc"],
             "average_precision": metrics["test"]["average_precision"],
         },f, indent=4)
+
+    mlflow.log_artifact(str(ARTIFACTS_DIR / "preprocessor.pkl"), artifact_path="preprocessor")
+    mlflow.log_artifact(str(ARTIFACTS_DIR / "reference.csv"), artifact_path="reference")
+    mlflow.log_artifact(str(ARTIFACTS_DIR / "preprocessing_artifact.json"), artifact_path="preprocessor")
+    mlflow.log_artifact(str(ARTIFACTS_DIR / "model_info.json"), artifact_path="model_info")
     
 
 
@@ -207,6 +219,5 @@ def main() -> None:
                         "validation":val_metrics,
                         "test":test_metrics
                        })
-        mlflow.log_artifact("artifacts/model_info.json", artifact_path="model_info")
 if __name__ == "__main__":
     main()
