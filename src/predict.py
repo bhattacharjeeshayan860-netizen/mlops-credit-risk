@@ -12,13 +12,18 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import mlflow
-import mlflow.sklearn
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
 from src.preprocessing import CreditRiskPreprocessor
 from src.utils import MLFLOW_ARTIFACT_PATH, MLFLOW_EXPERIMENT_NAME, MLFLOW_TRACKING_URI
+
+
+def _import_mlflow():
+    """Lazy-import MLflow so the API can start without it when using local artifacts."""
+    import mlflow
+    import mlflow.sklearn  # noqa: F401
+    return mlflow
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,7 @@ _model_info: dict[str, Any] | None = None
 
 def get_latest_run_id() -> str:
     """Return the most recent run ID for the configured MLflow experiment."""
+    mlflow = _import_mlflow()
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     runs = mlflow.search_runs(
         experiment_names=[MLFLOW_EXPERIMENT_NAME],
@@ -48,6 +54,7 @@ def get_latest_run_id() -> str:
 
 def load_model_from_mlflow(run_id: str | None = None) -> Pipeline:
     """Load a trained sklearn model from MLflow artifacts."""
+    mlflow = _import_mlflow()
     if run_id is None:
         run_id = get_latest_run_id()
     return mlflow.sklearn.load_model(f"runs:/{run_id}/{MLFLOW_ARTIFACT_PATH}")
@@ -55,6 +62,7 @@ def load_model_from_mlflow(run_id: str | None = None) -> Pipeline:
 
 def load_preprocessor_from_mlflow(run_id: str | None = None) -> CreditRiskPreprocessor:
     """Load the fitted preprocessor from MLflow artifacts."""
+    mlflow = _import_mlflow()
     if run_id is None:
         run_id = get_latest_run_id()
     local_dir = mlflow.artifacts.download_artifacts(f"runs:/{run_id}/preprocessor")
@@ -77,8 +85,6 @@ def load_resources() -> tuple[Pipeline, CreditRiskPreprocessor, dict[str, Any]]:
     cached as module-level globals so helper functions can use them directly.
     """
     global _model, _preprocessor, _model_info
-
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
     try:
         _model = load_model_from_mlflow()

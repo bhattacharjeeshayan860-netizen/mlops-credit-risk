@@ -1,0 +1,49 @@
+# VCS and editor state
+.git
+.github
+.gitignore
+.vscode
+.agents
+
+# Python environments and caches
+.conda/
+.venv/
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+.pytest_cache/
+.ipython/
+.ipynb_checkpoints/
+
+# Docker build artefacts
+docker/
+Dockerfile*
+.dockerignore
+
+# Project docs/planning (not needed at runtime)
+README.md
+FILE_GUIDE.md
+PROJECT_TASK.md
+
+# Local data / notebooks / experiment outputs
+data/
+notebooks/
+mlflow/
+mlflow-artifacts/
+mlflow-db/
+grafana-data/
+mlflow.db
+*.db
+*.sqlite
+*.sqlite3
+*.env*
+
+# Training-only modules (the image only needs predict.py, preprocessing.py, utils.py)
+src/train.py
+src/monitor.py
+
+# Artifacts that are not required for inference
+artifacts/reference.csv
+artifacts/preprocessing_artifact.json
+artifacts/metrics.json

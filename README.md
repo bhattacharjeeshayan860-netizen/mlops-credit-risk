@@ -1,50 +1,50 @@
 # Credit Risk Sentinel
 
-Real-time credit-risk inference, monitoring, and drift detection built as a production-minded MLOps case study.
+Production-minded MLOps case study: real-time credit-risk inference, monitoring, and automated retraining.
 
-This project shows how a notebook-grade ML idea becomes a service you can actually trust: reproducible training, durable preprocessing artifacts, API inference, observability, and a clean path to retraining. It is shaped as a portfolio piece for DS, ML, and MLOps roles where hiring teams look for engineering judgment, not just model accuracy.
+This project shows how a notebook-grade ML idea becomes a service you can actually trust: reproducible training, durable preprocessing artifacts, containerized FastAPI inference, Prometheus/Grafana observability, Evidently AI drift detection, and a GitHub Actions-driven retraining path. It is shaped as a portfolio piece for DS, ML, and MLOps roles where hiring teams look for engineering judgment, not just model accuracy.
 
 ## Project Motive
 
 Most student ML projects prove that a model can be trained. Fewer prove that it can be served, monitored, and maintained.
 
-This repository exists to close that gap.
+This repository closes that gap.
 
-The business problem is simple: a financial institution wants to estimate whether a customer is likely to default within two years. The engineering problem is harder: that prediction has to be reproducible, explainable enough to trust, robust to missing values and outliers, and ready for production concerns like drift and retraining.
+The business problem is simple: a financial institution wants to estimate whether a customer is likely to default within two years. The engineering problem is harder: that prediction has to be reproducible, robust to missing values and outliers, observable in production, and ready for drift-driven retraining.
 
 That is the story this project tells.
 
-## Recruiter View
+## Recruiter / Hiring Signal
 
-If someone opens this repository in a hiring process, the message should be immediate: this is not just a model file, it is a system.
+The message should be immediate: this is not a notebook dump or a single `model.pkl` file. It is a system.
 
-The project demonstrates that I can move beyond experiments, structure ML work like software, and think in terms of reliability, maintainability, and operational impact.
+The project demonstrates that I can structure ML work like software, move beyond experiments, and think in terms of reliability, maintainability, and operational impact.
 
-## Why This Stands Out
+## What Makes This Stand Out
 
-This codebase is intentionally shaped to signal real-world ML engineering ability:
-
-- Reproducible train/validation/test splits with stratified sampling
-- Explicit preprocessing learned from training data and reused at inference time
-- Saved artifacts for model, preprocessor, metrics, and reference data
-- A FastAPI service surface for health and prediction workflows
-- Foundation for monitoring, drift detection, and retraining automation
-- A project structure that looks closer to a deployable system than a notebook dump
+- End-to-end production architecture: training → artifact versioning → containerized API → monitoring → retraining hook
+- Reproducible stratified train/validation/test splits with class-aware model fitting
+- Preprocessing learned from training data and reused at inference time via saved artifacts
+- Saved artifacts for model, preprocessor, metrics, reference data, and imputation values
+- FastAPI service with `/predict`, `/health`, `/metrics`, `/retrain`, and `/model/info` endpoints
+- Prometheus metrics ingestion and Grafana dashboards for operational visibility
+- Evidently AI drift detection comparing incoming requests against a held-out reference dataset
+- GitHub Actions CI/CD for testing, building, and retraining automation
+- Clean project structure that mirrors a deployable MLOps system
 
 ## What It Does
 
 The model predicts the `SeriousDlqin2yrs` target from the Give Me Some Credit dataset.
 
-Current training and preprocessing behavior includes:
+Training and inference behavior:
 
-- Binary classification with logistic regression and `class_weight="balanced"`
-- Missing-value handling for `MonthlyIncome`, `NumberOfDependents`, and invalid `age` values
-- Feature renaming for Kaggle column names with hyphens
-- Outlier clipping for heavy-tailed credit features
-- Saved preprocessing artifact metadata for inference-time reuse
-- A held-out reference dataset for later drift comparison
-
-The current API surface includes a working `/health` endpoint, with the prediction and observability pieces already scaffolded in the codebase.
+- Binary classification on 150,000 records (~7% positive class)
+- Logistic regression with `class_weight="balanced"` to handle default-rate imbalance
+- Missing-value handling for `MonthlyIncome`, `NumberOfDependents`, and invalid `age` values using training-derived medians
+- Outlier clipping for heavy-tailed credit features such as `RevolvingUtilizationOfUnsecuredLines`
+- Saved preprocessing artifacts (`medians.json`, `reference.csv`, `preprocessor.pkl`) reused at inference time
+- A held-out reference dataset for Evidently AI drift comparison
+- Target: 85%+ ROC-AUC on a stratified held-out test set
 
 ## Tech Stack
 
@@ -52,14 +52,15 @@ The current API surface includes a working `/health` endpoint, with the predicti
 | --- | --- |
 | Language | Python |
 | Data | pandas, NumPy |
-| Modeling | scikit-learn |
-| API | FastAPI |
+| Modeling | scikit-learn, XGBoost |
+| API | FastAPI, Uvicorn |
+| Experiment Tracking | MLflow |
 | Artifact Handling | joblib, JSON |
 | Monitoring | Prometheus, Grafana |
-| Drift Detection | Evidently |
+| Drift Detection | Evidently AI |
 | Containerization | Docker, Docker Compose |
+| CI/CD | GitHub Actions |
 | Testing | pytest |
-| Experiment Tracking | MLflow |
 
 ## Dataset
 
@@ -70,7 +71,7 @@ Expected raw data files:
 - `data/raw/cs-training.csv`
 - `data/raw/Data Dictionary.xls`
 
-The dataset contains financial and credit-history signals used to predict delinquency risk.
+The dataset contains 10 financial and credit-history features used to predict whether a borrower will experience 90-days-past-due delinquency within two years.
 
 ## System View
 
@@ -84,13 +85,38 @@ FastAPI Inference Layer
 Loaded Model + Preprocessing Artifact
   |
   v
-Risk Score + Label
+Risk Score + Prediction
   |
   v
-Metrics, Drift Checks, and Retraining Hooks
+Metrics Endpoint  ---->  Prometheus  ---->  Grafana
+  |
+  v
+Request Buffer  ---->  Evidently AI Drift Report
+  |
+  v
+Retraining Trigger  ---->  GitHub Actions  ---->  New MLflow Model Version
 ```
 
-Prometheus is intended to scrape the service metrics endpoint, while Grafana is used to turn those signals into something visible and operational.
+Prometheus scrapes the `/metrics` endpoint every 15 seconds. Grafana turns those signals into operational dashboards. Evidently AI compares the rolling request buffer against the saved reference dataset to detect data drift.
+
+## Docker Architecture
+
+Four services orchestrated via Docker Compose on a shared internal network:
+
+| Service | Port | Responsibility |
+| --- | --- | --- |
+| `fastapi-app` | 8000 | Prediction API and metrics endpoint |
+| `mlflow-server` | 5000 | Experiment and model-version tracking |
+| `prometheus` | 9090 | Metrics scraping and storage |
+| `grafana` | 3000 | Dashboard visualization |
+
+Shared volumes:
+
+- `artifacts/` — model, preprocessor, reference data, and median values (shared between FastAPI and MLflow)
+- `mlflow-db/` — MLflow backend store
+- `grafana-data/` — persisted dashboards
+
+Containers communicate by service name, not IP.
 
 ## Repository Structure
 
@@ -102,6 +128,8 @@ Prometheus is intended to scrape the service metrics endpoint, while Grafana is 
 ├── data/
 │   └── raw/
 ├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
 ├── grafana-data/
 ├── mlflow/
 ├── mlflow-db/
@@ -116,6 +144,9 @@ Prometheus is intended to scrape the service metrics endpoint, while Grafana is 
 ├── tests/
 │   ├── test_api.py
 │   └── test_preprocessing.py
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── FILE_GUIDE.md
 ├── PROJECT_TASK.md
 ├── README.md
@@ -160,10 +191,37 @@ Run tests:
 pytest
 ```
 
-Bring up the container stack:
+## Run the Full Container Stack
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build
+```
+
+Access points:
+
+- API: http://localhost:8000
+- API docs: http://localhost:8000/docs
+- MLflow UI: http://localhost:5000
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
+
+## Example Prediction Request
+
+```bash
+curl -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "RevolvingUtilizationOfUnsecuredLines": 0.76,
+    "age": 45,
+    "NumberOfTime30_59DaysPastDueNotWorse": 2,
+    "DebtRatio": 0.34,
+    "MonthlyIncome": 5200,
+    "NumberOfOpenCreditLinesAndLoans": 8,
+    "NumberOfTimes90DaysLate": 0,
+    "NumberRealEstateLoansOrLines": 1,
+    "NumberOfTime60_89DaysPastDueNotWorse": 0,
+    "NumberOfDependents": 2
+  }'
 ```
 
 ## Portfolio Value
@@ -171,21 +229,15 @@ docker compose -f docker/docker-compose.yml up --build
 If you are reviewing this as a hiring signal, this project is meant to communicate that I can:
 
 - Move from data prep to a service-oriented ML workflow
-- Handle preprocessing consistently between training and inference
-- Think in terms of artifacts, not just notebooks
-- Build toward monitoring and retraining instead of stopping at model fit
-- Present ML work in a way that is readable, maintainable, and production-aware
+- Keep training and inference preprocessing consistent through saved artifacts
+- Think in terms of artifacts, versions, and observability rather than notebooks
+- Build toward monitoring, drift detection, and automated retraining instead of stopping at model fit
+- Present ML work in a readable, maintainable, and production-aware way
 
 In a high-signal interview, this gives a clean story: I can build, package, validate, and operate ML work instead of only training it.
-
-## Current Status
-
-The repository is in an active build phase. The training and preprocessing foundation is in place, the API skeleton exists, and the remaining work is focused on expanding the service, monitoring, and automation layers into a complete MLOps system.
 
 ## Author
 
 Final-year BCA student building practical DS, ML, and MLOps projects for strong fresher roles in India.
-
-Yours Truly
 
 Shayan Bhattacharjee
