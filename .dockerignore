@@ -16,15 +16,13 @@ __pycache__/
 .ipython/
 .ipynb_checkpoints/
 
-# Docker build artefacts
-docker/
-Dockerfile*
-.dockerignore
-
 # Project docs/planning (not needed at runtime)
 README.md
 FILE_GUIDE.md
 PROJECT_TASK.md
+
+# Docker config itself is not needed inside the image
+docker/
 
 # Local data / notebooks / experiment outputs
 data/
@@ -40,10 +38,36 @@ mlflow.db
 *.env*
 
 # Training-only modules (the image only needs predict.py, preprocessing.py, utils.py)
-src/train.py
 src/monitor.py
+src/train.py
 
 # Artifacts that are not required for inference
-artifacts/reference.csv
-artifacts/preprocessing_artifact.json
+# NOTE: reference.csv IS needed at runtime for Evidently drift detection.
+# The same median/clip values are already baked into preprocessor.pkl,
+# so preprocessing_artifact.json is a duplicate and does not need to ship.
 artifacts/metrics.json
+artifacts/preprocessing_artifact.json
+artifacts/*.gitkeep
+
+#Tests
+tests/
+
+# Placeholder files used only to keep empty folders in git
+**/.gitkeep
+
+# Type-checker config and stub files (used by the editor, not by the API at runtime)
+pyrightconfig.json
+typings/
+
+# Operating-system junk files that may appear on Windows/macOS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local log files from dev runs / uvicorn
+*.log
+
+# Python packaging/build artifacts (ignored just in case)
+build/
+dist/
+*.egg-info/
