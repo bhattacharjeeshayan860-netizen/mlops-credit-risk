@@ -11,6 +11,7 @@ venv/
 # Local environment
 .env
 .env.*
+!.env.example
 
 # Data and generated artifacts
 data/raw/*

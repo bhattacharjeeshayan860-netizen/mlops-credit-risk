@@ -11,41 +11,85 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+
     ports:
-      - "8000:8000"
-    volumes:
-      - ..:/app
+      - "${FASTAPI_PORT:-8000}:8000"
+
+    env_file:
+      - ../.env
+
+    environment:
+      MLFLOW_TRACKING_URI: "http://mlflow-server:5000"
+
     depends_on:
-      - mlflow-server
+      mlflow-server:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   mlflow-server:
     image: ghcr.io/mlflow/mlflow:v2.14.1
+
     command: >
       mlflow server
-      --backend-store-uri sqlite:///mlflow/db/mlflow.db
+      --backend-store-uri sqlite:////mlflow/db/mlflow.db
       --default-artifact-root /mlflow/artifacts
       --host 0.0.0.0
       --port 5000
+
     ports:
-      - "5000:5000"
+      - "${MLFLOW_PORT:-5000}:5000"
+
     volumes:
-      - ../artifacts:/mlflow/artifacts
+      - ../mlflow-artifacts:/mlflow/artifacts
       - ../mlflow-db:/mlflow/db
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   prometheus:
     image: prom/prometheus:v2.50.0
+
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    command: "--config.file=/etc/prometheus/prometheus.yml"
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+    depends_on:
+      fastapi-app:
+        condition: service_healthy
 
   grafana:
     image: grafana/grafana:11.0.0
+
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
+
+    env_file:
+      - ../.env
+
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+
     volumes:
       - grafana-data:/var/lib/grafana
+
     depends_on:
       - prometheus
-    
+
 volumes:
   grafana-data:

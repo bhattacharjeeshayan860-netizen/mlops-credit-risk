@@ -1,11 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
-# Install curl for the HEALTHCHECK, then clean apt caches to keep the layer small.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-
 # Create a non-root user to run the API.
 RUN useradd --create-home --shell /bin/bash appuser
 
@@ -26,8 +21,9 @@ USER appuser
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Use Python's stdlib for the healthcheck so we don't need to install curl.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
 
 # Bind to 0.0.0.0 so the container is reachable from outside.
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

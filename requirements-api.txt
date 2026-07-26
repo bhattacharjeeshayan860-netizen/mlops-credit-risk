@@ -1,19 +1,24 @@
 # Runtime dependencies for the FastAPI inference service only.
 # Keep this file lean — every extra package grows the Docker image and slows builds.
-fastapi
-uvicorn[standard]
-pydantic
-python-dotenv
-python-multipart
+fastapi==0.138.0
+uvicorn[standard]==0.49.0
+pydantic==2.13.4
+python-dotenv==1.2.2
+python-multipart==0.0.32
 
 # Data / ML core
-numpy
-pandas
-scikit-learn
-joblib
+# Pin to the versions used when the model/preprocessor were trained to avoid
+# joblib/sklearn deserialization warnings or failures in the container.
+numpy==2.4.6
+pandas==2.3.3
+scikit-learn==1.9.0
+joblib==1.5.3
 
 # MLOps / monitoring
-mlflow
-evidently
-prometheus-client
-prometheus-fastapi-instrumentator
+# NOTE: evidently is intentionally omitted here. The API code does not import it
+# yet (src/monitor.py is excluded by .dockerignore and is still a stub). It stays
+# in requirements.txt for notebook/development work; add it back to this file only
+# when drift detection is actually wired into the service.
+mlflow-skinny==2.14.1
+prometheus-client==0.25.0
+prometheus-fastapi-instrumentator==8.0.2
