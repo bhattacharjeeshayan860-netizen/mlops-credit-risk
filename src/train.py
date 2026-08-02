@@ -15,6 +15,10 @@ import time
 # Force UTF-8 stdout on Windows so MLflow's emoji logs don't crash with cp1252.
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import joblib
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -31,7 +35,6 @@ from src.utils import (MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME, MLFLOW_ARTIF
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 RANDOM_STATE = 42

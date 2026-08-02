@@ -85,17 +85,25 @@ def load_resources() -> tuple[Pipeline, CreditRiskPreprocessor, dict[str, Any]]:
     cached as module-level globals so helper functions can use them directly.
     """
     global _model, _preprocessor, _model_info
-
+    print("1 enterd load_resources")
     try:
-        _model = load_model_from_mlflow()
-        _preprocessor = load_preprocessor_from_mlflow()
-        _model_info = load_model_info()
-        logger.info("Loaded model and preprocessor from MLflow.")
-    except Exception:
-        logger.exception("MLflow load failed; falling back to local artifacts.")
         _model = joblib.load(ARTIFACTS_DIR / "model.pkl")
         _preprocessor = joblib.load(ARTIFACTS_DIR / "preprocessor.pkl")
         _model_info = load_model_info()
+        print("loaded model, preprocessor, and model info from local artifacts")
+        logger.info("Loaded model and preprocessor from local artifacts.")
+        print("loaded from local artifacts")
+    except Exception:
+        print("local artifact load failed; trying mlflow.")
+        logger.exception("Local artifact load failed; trying MLflow.")
+        _model = load_model_from_mlflow()
+        print("loaded model from mlflow")
+        _preprocessor = load_preprocessor_from_mlflow()
+        print("loaded preprocessor from mlflow")
+        _model_info = load_model_info()
+        print("loaded model info from local artifacts")
+        logger.info("Loaded model and preprocessor from MLflow.")
+        print("loaded from mlflow")
 
     return _model, _preprocessor, _model_info
 
