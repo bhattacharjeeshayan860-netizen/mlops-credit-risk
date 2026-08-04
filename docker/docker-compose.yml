@@ -50,7 +50,12 @@ services:
       - ../mlflow-db:/mlflow/db
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      test: [
+       "CMD",
+       "python",
+       "-c",
+       "import urllib.request; urllib.request.urlopen('http://localhost:5000').read()"
+      ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -73,7 +78,7 @@ services:
         condition: service_healthy
 
   grafana:
-    image: grafana/grafana:11.0.0
+    image: grafana/grafana:11.6.0
 
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
