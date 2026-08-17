@@ -12,6 +12,7 @@ from typing import Optional
 from fastapi import FastAPI
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
+from src.monitor import log_prediction_input
 from src.predict import load_resources, make_prediction, load_model_info
 
 class PredictionRequest(BaseModel):
@@ -50,10 +51,12 @@ def startup_event():
     """Load model and preprocessor into memory at startup."""
     global _model, _preprocessor, _model_info
     _model,_preprocessor,_model_info= load_resources()
+
 @app.post("/predict")
 def predict(request: PredictionRequest)-> dict:
     """Return the object (predictionRequest) as a dictionary."""
     prediction_input= request.model_dump()
+    log_prediction_input(prediction_input)
     result= make_prediction(prediction_input, model=_model, preprocessor=_preprocessor)
     PREDICTION_COUNT.labels(risk_label=result["risk_label"]).inc()
     PREDICTION_HISTOGRAM.observe(result["default_probability"])
