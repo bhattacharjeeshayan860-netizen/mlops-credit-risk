@@ -14,8 +14,8 @@ if str(PROJECT_ROOT) not in sys.path:
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 FILE_PATH=ARTIFACTS_DIR / "prediction_log.csv"
 
-def log_prediction_input(prediction_input: dict):
-    data_to_log= pd.DataFrame([prediction_input])
+def log_prediction_input(prediction_input: pd.DataFrame) -> None:
+    data_to_log= prediction_input
     if FILE_PATH.exists():
         
         existing_data= load_prediction_log()

@@ -56,8 +56,9 @@ def startup_event():
 def predict(request: PredictionRequest)-> dict:
     """Return the object (predictionRequest) as a dictionary."""
     prediction_input= request.model_dump()
-    log_prediction_input(prediction_input)
-    result= make_prediction(prediction_input, model=_model, preprocessor=_preprocessor)
+    
+    result,monitoring_data= make_prediction(prediction_input, model=_model, preprocessor=_preprocessor)
+    log_prediction_input(monitoring_data)
     PREDICTION_COUNT.labels(risk_label=result["risk_label"]).inc()
     PREDICTION_HISTOGRAM.observe(result["default_probability"])
     return result

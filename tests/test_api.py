@@ -31,7 +31,8 @@ def test_health_endpoint_returns_ok(client) -> None:
 
 def test_inference_endpoint_returns_prediction(client) -> None:
     """The prediction endpoint should return a valid inference payload."""
-    """for i in range(1005):
+    """used to create a rolling buffer of 1000 recent requests for drift detection
+    for i in range(1005):
         test_input = {
             "RevolvingUtilizationOfUnsecuredLines": 0.50,
             "age": 20 + (i % 50),
@@ -46,7 +47,13 @@ def test_inference_endpoint_returns_prediction(client) -> None:
         }
     
 
-        log_prediction_input(test_input)"""
+        result, X = make_prediction(
+        prediction_input,
+        model=_model,
+        preprocessor=_preprocessor
+        )
+
+        log_prediction_input(X)"""
     prediction_input = {
     "RevolvingUtilizationOfUnsecuredLines": 0.76,
     "age": 45,

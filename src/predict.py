@@ -85,25 +85,18 @@ def load_resources() -> tuple[Pipeline, CreditRiskPreprocessor, dict[str, Any]]:
     cached as module-level globals so helper functions can use them directly.
     """
     global _model, _preprocessor, _model_info
-    print("1 enterd load_resources")
+
     try:
         _model = joblib.load(ARTIFACTS_DIR / "model.pkl")
         _preprocessor = joblib.load(ARTIFACTS_DIR / "preprocessor.pkl")
         _model_info = load_model_info()
-        print("loaded model, preprocessor, and model info from local artifacts")
         logger.info("Loaded model and preprocessor from local artifacts.")
-        print("loaded from local artifacts")
     except Exception:
-        print("local artifact load failed; trying mlflow.")
         logger.exception("Local artifact load failed; trying MLflow.")
         _model = load_model_from_mlflow()
-        print("loaded model from mlflow")
         _preprocessor = load_preprocessor_from_mlflow()
-        print("loaded preprocessor from mlflow")
         _model_info = load_model_info()
-        print("loaded model info from local artifacts")
         logger.info("Loaded model and preprocessor from MLflow.")
-        print("loaded from mlflow")
 
     return _model, _preprocessor, _model_info
 
@@ -112,7 +105,7 @@ def make_prediction(
     input_data: dict[str, Any],
     model: Pipeline | None = None,
     preprocessor: CreditRiskPreprocessor | None = None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], pd.DataFrame]:
     """Return a credit-risk prediction for one API request payload.
 
     The `model` and `preprocessor` arguments are optional. If they are not
@@ -131,11 +124,13 @@ def make_prediction(
     default_probability = float(model.predict_proba(X)[:, 1][0])
     prediction = 1 if default_probability >= DEFAULT_THRESHOLD else 0
     risk_label = "high_risk" if prediction == 1 else "low_risk"
-
-    return {
+    result = {
         "prediction": prediction,
         "default_probability": default_probability,
         "risk_label": risk_label,
         "model_version": _model_info.get("version") if _model_info else None,
         "mlflow_run_id": _model_info.get("mlflow_run_id") if _model_info else None,
     }
+
+
+    return result,X
