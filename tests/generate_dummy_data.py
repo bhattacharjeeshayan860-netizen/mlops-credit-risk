@@ -1,10 +1,3 @@
-"""Generate realistic dummy monitoring data for the credit-risk API.
-
-This script creates a synthetic production-style request log with 1,000 unique
-rows and saves it to the project's monitoring output path defined in
-``src.monitor``.
-"""
-
 import os
 import sys
 from pathlib import Path
@@ -19,99 +12,114 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.monitor import FILE_PATH
 
 
-def generate_dummy_data() -> None:
-    """Create a 1,000-row dummy production log and save it to the monitoring CSV."""
+def generate_dummy_data():
     rng = np.random.default_rng(42)
     n_rows = 1000
+    reference_path = PROJECT_ROOT / "artifacts" / "reference.csv"
+    output_path = FILE_PATH
 
-    # Generate realistic base feature values.
-    revolving_util = rng.uniform(0, 1, n_rows)
+    if not os.path.exists(reference_path):
+        raise FileNotFoundError(f"Reference file not found at {reference_path}")
 
-    # Keep ages realistic and inject a few invalid values to match the
-    # production preprocessing rule: age <= 0 is treated as invalid.
-    age = rng.integers(21, 85, n_rows).astype(float)
-    invalid_age_indices = rng.choice(n_rows, size=5, replace=False)
-    age[invalid_age_indices] = rng.uniform(-10, 0, size=5)
+    # Load reference data
+    ref_df = pd.read_csv(reference_path)
 
-    num_30_59 = rng.integers(0, 5, n_rows)
-    extreme_past_due_indices = rng.choice(n_rows, size=5, replace=False)
-    num_30_59[extreme_past_due_indices] = 95
+    # 1. Sample 1,000 unique rows from the reference dataset to preserve correlations and distributions
+    # We use a loop to ensure we get exactly n_rows unique rows
+    sampled_indices = []
+    all_indices = list(ref_df.index)
+    
+    # Shuffle indices to pick random ones
+    rng.shuffle(all_indices)
+    
+    # Take first 1000 (they are unique because indices are unique)
+    sampled_indices = all_indices[:n_rows]
+    df = ref_df.loc[sampled_indices].copy()
 
-    debt_ratio = rng.uniform(0, 1, n_rows)
+    # 2. Handle Missingness (as per requirements: MonthlyIncome ~20%, Dependents ~2.6%)
+    # The reference file uses flags but the values might be filled.
+    # We want the synthetic data to have actual NaNs.
+    
+    # MonthlyIncome missingness
+    # Target is ~19.7%
+    target_income_missing_rate = 0.1974
+    # We'll use the existing flags from the reference to decide where to put NaNs, 
+    # or just sample based on the rate. Sampling based on rate is more direct.
+    income_missing_mask = rng.random(n_rows) < target_income_missing_rate
+    df.loc[income_missing_mask, 'MonthlyIncome'] = np.nan
+    
+    # NumberOfDependents missingness
+    # Target is ~2.59%
+    target_dependents_missing_rate = 0.0259
+    dependents_missing_mask = rng.random(n_rows) < target_dependents_missing_rate
+    df.loc[dependents_missing_mask, 'NumberOfDependents'] = np.nan
 
-    monthly_income = rng.uniform(2000, 15000, n_rows)
-    income_missing_indices = rng.choice(n_rows, size=10, replace=False)
-    monthly_income[income_missing_indices] = np.nan
-
-    open_lines = rng.integers(1, 30, n_rows)
-
-    num_90_late = rng.integers(0, 5, n_rows)
-    num_90_late[rng.choice(n_rows, size=2, replace=False)] = 100
-
-    real_estate = rng.integers(0, 5, n_rows)
-    num_60_89 = rng.integers(0, 5, n_rows)
-
-    dependents = rng.integers(0, 6, n_rows).astype(float)
-    dependents_missing_indices = rng.choice(n_rows, size=5, replace=False)
-    dependents[dependents_missing_indices] = np.nan
-
-    df = pd.DataFrame(
-        {
-            "RevolvingUtilizationOfUnsecuredLines": revolving_util,
-            "age": age,
-            "NumberOfTime30_59DaysPastDueNotWorse": num_30_59,
-            "DebtRatio": debt_ratio,
-            "MonthlyIncome": monthly_income,
-            "NumberOfOpenCreditLinesAndLoans": open_lines,
-            "NumberOfTimes90DaysLate": num_90_late,
-            "NumberRealEstateLoansOrLines": real_estate,
-            "NumberOfTime60_89DaysPastDueNotWorse": num_60_89,
-            "NumberOfDependents": dependents,
-        }
-    )
-
-    # Match the project's preprocessing conventions for monitoring flags.
-    df["MonthlyIncomeWasMissing"] = df["MonthlyIncome"].isna().astype(int)
-    df["NumberOfDependentsWasMissing"] = df["NumberOfDependents"].isna().astype(int)
-    df["AgeWasInvalid"] = (df["age"] <= 0).astype(int)
-
+    # 3. Recalculate/Ensure Monitoring Columns are correct
+    # MonthlyIncomeWasMissing = 1 when MonthlyIncome is missing, otherwise 0
+    df['MonthlyIncomeWasMissing'] = df['MonthlyIncome'].isna().astype(int)
+    
+    # NumberOfDependentsWasMissing = 1 when NumberOfDependents is missing, otherwise 0
+    df['NumberOfDependentsWasMissing'] = df['NumberOfDependents'].isna().astype(int)
+    
+    # AgeWasInvalid = 1 only when age <= 0, otherwise 0
+    df['AgeWasInvalid'] = (df['age'] <= 0).astype(int)
+    
+    # PastDueExtremeCode = 1 when any of the past-due count features is >= 90, otherwise 0
     past_due_cols = [
-        "NumberOfTime30_59DaysPastDueNotWorse",
-        "NumberOfTimes90DaysLate",
-        "NumberOfTime60_89DaysPastDueNotWorse",
+        "NumberOfTime30_59DaysPastDueNotWorse", 
+        "NumberOfTimes90DaysLate", 
+        "NumberOfTime60_89DaysPastDueNotWorse"
     ]
-    df["PastDueExtremeCode"] = (df[past_due_cols] >= 90).any(axis=1).astype(int)
+    # Ensure these are treated as numeric for the comparison
+    for col in past_due_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    df['PastDueExtremeCode'] = (df[past_due_cols] >= 90).any(axis=1).astype(int)
 
-    ordered_columns = [
-        "RevolvingUtilizationOfUnsecuredLines",
-        "age",
-        "NumberOfTime30_59DaysPastDueNotWorse",
-        "DebtRatio",
-        "MonthlyIncome",
-        "NumberOfOpenCreditLinesAndLoans",
-        "NumberOfTimes90DaysLate",
-        "NumberRealEstateLoansOrLines",
-        "NumberOfTime60_89DaysPastDueNotWorse",
-        "NumberOfDependents",
-        "MonthlyIncomeWasMissing",
-        "NumberOfDependentsWasMissing",
-        "AgeWasInvalid",
-        "PastDueExtremeCode",
+    # 4. Ensure column order
+    cols_order = [
+        "RevolvingUtilizationOfUnsecuredLines", "age", "NumberOfTime30_59DaysPastDueNotWorse",
+        "DebtRatio", "MonthlyIncome", "NumberOfOpenCreditLinesAndLoans", "NumberOfTimes90DaysLate",
+        "NumberRealEstateLoansOrLines", "NumberOfTime60_89DaysPastDueNotWorse", "NumberOfDependents",
+        "MonthlyIncomeWasMissing", "NumberOfDependentsWasMissing", "AgeWasInvalid", "PastDueExtremeCode"
     ]
-    df = df[ordered_columns]
+    df = df[cols_order]
 
+    # 5. Final Validation
     assert df.shape == (1000, 14), f"Shape mismatch: {df.shape}"
     assert df.duplicated().sum() == 0, "Duplicate rows found"
 
+    # Print required statistics
+    print("--- Synthetic Data Stats ---")
     print(f"Shape: {df.shape}")
-    print(f"Columns: {df.columns.tolist()}")
-    print(f"Duplicate rows: {df.duplicated().sum()}")
+    print(f"Duplicate count: {df.duplicated().sum()}")
+    
+    print("\n--- Feature Statistics ---")
+    stats_cols = cols_order
+    # Grouping for cleaner output
+    for col in stats_cols:
+        print(f"\nColumn: {col}")
+        print(f"  Mean:    {df[col].mean():.4f}")
+        print(f"  Median:  {df[col].median():.4f}")
+        print(f"  Min:     {df[col].min():.4f}")
+        print(f"  Max:     {df[col].max():.4f}")
+        # Check missingness for all
+        missing_rate = df[col].isna().mean()
+        print(f"  Missing: {missing_rate:.4f}")
 
-    output_path = FILE_PATH
+    print("\n--- Comparison with Reference ---")
+    ref_stats = ref_df[cols_order].describe().loc[['mean', 'min', 'max']]
+    # Note: ref_df might have different columns or types, but we use cols_order
+    # We'll just print a few key ones to show it's working.
+    print("Reference Means for key features:")
+    for col in ["age", "DebtRatio", "MonthlyIncome", "NumberOfDependents"]:
+        if col in ref_df.columns:
+            print(f"  {col}: Ref={ref_df[col].mean():.4f}, Synthetic={df[col].mean():.4f}")
+
+    # 6. Save to the monitoring module's configured file path.
     os.makedirs(output_path.parent, exist_ok=True)
     df.to_csv(output_path, index=False)
-    print(f"Output path: {output_path}")
-
+    print(f"\nOutput saved to: {output_path}")
 
 if __name__ == "__main__":
     generate_dummy_data()
