@@ -5,6 +5,7 @@ Evidently AI to compare live request data against the saved training reference
 dataset.
 """
 from pathlib import Path
+from unittest import result
 import pandas as pd
 from evidently import Report,Dataset,DataDefinition
 from evidently.presets import DataDriftPreset
@@ -46,7 +47,7 @@ def load_prediction_log() -> pd.DataFrame:
         return pd.read_csv(FILE_PATH)
     else:
         return pd.DataFrame()  # Return an empty DataFrame if the file doesn't exist
-def run_drift_check() -> None:
+def run_drift_check() -> dict:
     """Run drift detection between reference data and recent API requests."""
     current_time = pd.Timestamp.now().strftime("%Y_%m_%d_%H_%M_%S")
     NUMERIC_COLUMNS = [
@@ -67,22 +68,45 @@ def run_drift_check() -> None:
         "AgeWasInvalid",
         "PastDueExtremeCode",
     ]
-    ref_data = load_reference_data()
-    recent_data = load_prediction_log()
+    reference_data_CSV= load_reference_data()
+    recent_data_csv = load_prediction_log()
 
     monitoring_columns = NUMERIC_COLUMNS + CATEGORICAL_COLUMNS
     data_definition = DataDefinition(
         numerical_columns= NUMERIC_COLUMNS,
         categorical_columns= CATEGORICAL_COLUMNS
     )
-    ref_data = Dataset.from_pandas(ref_data[monitoring_columns],
+    ref_data = Dataset.from_pandas(reference_data_CSV[monitoring_columns],
                                             data_definition=data_definition)
-    recent_data = Dataset.from_pandas(recent_data[monitoring_columns],
+    recent_data = Dataset.from_pandas(recent_data_csv[monitoring_columns],
                                       data_definition= data_definition)
     report = Report(metrics=[DataDriftPreset()])
-    report.run(reference_data=ref_data,
-               current_data= recent_data,
-               )
-    data=report.as_dict()
-    report.save_html(f"{PROJECT_ROOT}/reports/drift_report{current_time}.html")
+    snapshot = report.run(reference_data=ref_data,
+                          current_data=recent_data,
+                          )
+    data = snapshot.dict()
+    
+    drifted_columns = []
+    drift_detected=False
+    drift_share_threshold=data['metrics'][0]['config']['drift_share']
+    
+    for metric in data['metrics']:
+        if metric['config']['type']=='evidently:metric_v2:DriftedColumnsCount':
+            continue
+        if metric['value']>=metric['config']['threshold']:
+            drifted_columns.append(metric['config']['column'])
 
+    drifted_column_count=len(drifted_columns)
+    actual_drift_share= len(drifted_columns)/len(monitoring_columns)
+    if actual_drift_share>=drift_share_threshold:
+        drift_detected=True
+    snapshot.save_html(f"{PROJECT_ROOT}/reports/drift_report_{current_time}_{drift_detected}.html")
+    return {
+    "drift_detected": drift_detected,
+    "drifted_columns": drifted_columns,
+    "drifted_column_count": drifted_column_count,
+    "actual_drift_share": actual_drift_share,
+    "drift_share_threshold": drift_share_threshold,
+    "reference_rows": len(reference_data_CSV),
+    "current_rows": len(recent_data_csv),
+}
