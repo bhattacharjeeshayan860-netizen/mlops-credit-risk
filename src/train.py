@@ -5,15 +5,11 @@ load data, preprocess features, train a classifier, evaluate ROC-AUC, save the
 model, save preprocessing medians, save a reference dataset, and log results to
 MLflow.
 """
-import io
 import sys
 from pathlib import Path
 import json
 from datetime import datetime
 import time
-
-# Force UTF-8 stdout on Windows so MLflow's emoji logs don't crash with cp1252.
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
