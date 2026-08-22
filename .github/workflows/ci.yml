@@ -22,3 +22,5 @@ jobs:
           pip install -r requirements-api.txt
       - name: Run tests
         run: python -m pytest
+      - name: Build Docker image
+        run: docker build -t credit-risk-api -f docker/Dockerfile .
