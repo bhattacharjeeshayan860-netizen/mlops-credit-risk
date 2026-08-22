@@ -87,16 +87,17 @@ def load_resources() -> tuple[Pipeline, CreditRiskPreprocessor, dict[str, Any]]:
     global _model, _preprocessor, _model_info
 
     try:
-        _model = joblib.load(ARTIFACTS_DIR / "model.pkl")
-        _preprocessor = joblib.load(ARTIFACTS_DIR / "preprocessor.pkl")
-        _model_info = load_model_info()
-        logger.info("Loaded model and preprocessor from local artifacts.")
-    except Exception:
         logger.exception("Local artifact load failed; trying MLflow.")
         _model = load_model_from_mlflow()
         _preprocessor = load_preprocessor_from_mlflow()
         _model_info = load_model_info()
         logger.info("Loaded model and preprocessor from MLflow.")
+
+    except Exception:
+        _model = joblib.load(ARTIFACTS_DIR / "model.pkl")
+        _preprocessor = joblib.load(ARTIFACTS_DIR / "preprocessor.pkl")
+        _model_info = load_model_info()
+        logger.info("Loaded model and preprocessor from local artifacts.")
 
     return _model, _preprocessor, _model_info
 

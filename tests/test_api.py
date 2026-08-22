@@ -3,8 +3,11 @@
 import sys
 from pathlib import Path
 import pytest
+import pandas as pd
 from fastapi.testclient import TestClient
-from api.main import app
+import api.main as api_main
+from src.preprocessing import CreditRiskPreprocessor
+from src.train import build_model
 from src.monitor import log_prediction_input
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -15,9 +18,33 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     """Create a FastAPI test client that runs startup/shutdown events."""
-    with TestClient(app) as test_client:
+    training_data = pd.DataFrame(
+        {
+            "RevolvingUtilizationOfUnsecuredLines": [0.1, 0.8, 0.3, 0.6],
+            "age": [30, 45, 60, 25],
+            "NumberOfTime30_59DaysPastDueNotWorse": [0, 2, 0, 1],
+            "DebtRatio": [0.2, 0.7, 0.3, 0.5],
+            "MonthlyIncome": [4000.0, 5200.0, 7000.0, 2500.0],
+            "NumberOfOpenCreditLinesAndLoans": [3, 8, 10, 2],
+            "NumberOfTimes90DaysLate": [0, 1, 0, 2],
+            "NumberRealEstateLoansOrLines": [0, 1, 2, 0],
+            "NumberOfTime60_89DaysPastDueNotWorse": [0, 0, 1, 0],
+            "NumberOfDependents": [0.0, 2.0, 1.0, 3.0],
+        }
+    )
+    preprocessor = CreditRiskPreprocessor().fit(training_data)
+    model = build_model().fit(preprocessor.transform(training_data), [0, 1, 0, 1])
+    model_info = {
+        "model_type": "LogisticRegression",
+        "version": "test",
+        "trained_at": "test",
+    }
+    monkeypatch.setattr(api_main, "load_resources", lambda: (model, preprocessor, model_info))
+    monkeypatch.setattr(api_main, "load_model_info", lambda: model_info)
+
+    with TestClient(api_main.app) as test_client:
         yield test_client
 
 
