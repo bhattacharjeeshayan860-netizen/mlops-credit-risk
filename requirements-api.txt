@@ -22,3 +22,4 @@ joblib==1.5.3
 mlflow-skinny==2.14.1
 prometheus-client==0.25.0
 prometheus-fastapi-instrumentator==8.0.2
+pytest==7.4.2
