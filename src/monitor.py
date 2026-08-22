@@ -5,7 +5,6 @@ Evidently AI to compare live request data against the saved training reference
 dataset.
 """
 from pathlib import Path
-from unittest import result
 import pandas as pd
 from evidently import Report,Dataset,DataDefinition
 from evidently.presets import DataDriftPreset
@@ -47,6 +46,7 @@ def load_prediction_log() -> pd.DataFrame:
         return pd.read_csv(FILE_PATH)
     else:
         return pd.DataFrame()  # Return an empty DataFrame if the file doesn't exist
+    
 def run_drift_check() -> dict:
     """Run drift detection between reference data and recent API requests."""
     current_time = pd.Timestamp.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -69,7 +69,40 @@ def run_drift_check() -> dict:
         "PastDueExtremeCode",
     ]
     reference_data_CSV= load_reference_data()
+    if reference_data_CSV.empty:
+        return {
+            "drift_detected": False,
+            "drifted_columns": [],
+            "drifted_column_count": 0,
+            "actual_drift_share": 0.0,
+            "drift_share_threshold": 0.0,
+            "reference_rows": 0,
+            "current_rows": 0,
+            "message": "Reference data is empty. Drift detection cannot be performed."
+        }
     recent_data_csv = load_prediction_log()
+    if recent_data_csv.empty:
+        return {
+            "drift_detected": False,
+            "drifted_columns": [],
+            "drifted_column_count": 0,
+            "actual_drift_share": 0.0,
+            "drift_share_threshold": 0.0,
+            "reference_rows": len(reference_data_CSV),
+            "current_rows": 0,
+            "message": "Recent prediction log is empty. Drift detection cannot be performed."
+        }
+    elif recent_data_csv.shape[0]<1000:
+        return {
+            "drift_detected": False,
+            "drifted_columns": [],
+            "drifted_column_count": 0,
+            "actual_drift_share": 0.0,
+            "drift_share_threshold": 0.0,
+            "reference_rows": len(reference_data_CSV),
+            "current_rows": len(recent_data_csv),
+            "message": "Not enough recent data for drift detection. At least 1000 rows are required."
+        }
 
     monitoring_columns = NUMERIC_COLUMNS + CATEGORICAL_COLUMNS
     data_definition = DataDefinition(
@@ -109,4 +142,5 @@ def run_drift_check() -> dict:
     "drift_share_threshold": drift_share_threshold,
     "reference_rows": len(reference_data_CSV),
     "current_rows": len(recent_data_csv),
+    "message": "Drift detection completed."
 }

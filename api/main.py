@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import FastAPI
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
-from src.monitor import log_prediction_input
+from src.monitor import log_prediction_input, run_drift_check
 from src.predict import load_resources, make_prediction, load_model_info
 
 class PredictionRequest(BaseModel):
@@ -71,7 +71,11 @@ def model_info()-> dict:
         return result 
     raise ValueError("Model info does not exist.")
 
-
+@app.post("/monitor")
+def monitor_drift() -> dict:
+    """Run drift detection and return results."""
+    result= run_drift_check()
+    return result
 @app.get("/health")
 def health() -> dict[str, str]:
     """Return service health status."""
