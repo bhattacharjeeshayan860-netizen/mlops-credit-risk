@@ -7,6 +7,7 @@ python-dotenv==1.2.2
 python-multipart==0.0.32
 pytest==7.4.2
 httpx==0.28.1
+evidently==0.7.21
 # Data / ML core
 # Pin to the versions used when the model/preprocessor were trained to avoid
 # joblib/sklearn deserialization warnings or failures in the container.
