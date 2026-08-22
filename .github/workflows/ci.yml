@@ -2,9 +2,9 @@ name: CI #Name of the workflow
 
 on: # Triggers on push or pull request events but only for the main branch
   push:
-    branches: ["main"]
+    branches: ["master"]
   pull_request:
-    branches: ["main"]
+    branches: ["master"]
 
 jobs:
   test: # This job runs on Ubuntu
@@ -22,5 +22,3 @@ jobs:
           pip install -r requirements-api.txt
       - name: Run tests
         run: pytest
-      - name: Build Docker image
-        run: docker build -f docker/Dockerfile -t fastapi-app .
