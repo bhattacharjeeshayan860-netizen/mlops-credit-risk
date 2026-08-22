@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from unittest.mock import Mock
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 import api.main as api_main
@@ -21,7 +22,7 @@ def client(monkeypatch):
     preprocessor = Mock()
     preprocessor.transform.side_effect = lambda frame: frame
     model = Mock()
-    model.predict_proba.return_value = [[0.2, 0.8]]
+    model.predict_proba.return_value = np.array([[0.2, 0.8]])
     model_info = {
         "model_type": "LogisticRegression",
         "version": "test",
