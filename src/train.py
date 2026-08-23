@@ -29,9 +29,6 @@ import logging
 from src.preprocessing import CreditRiskPreprocessor, TARGET_COLUMN
 from src.utils import (MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME, MLFLOW_ARTIFACT_PATH)
 
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
-
 DATA_PATH = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 RANDOM_STATE = 42
