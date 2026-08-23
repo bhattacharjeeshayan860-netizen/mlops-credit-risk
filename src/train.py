@@ -6,6 +6,7 @@ model, save preprocessing medians, save a reference dataset, and log results to
 MLflow.
 """
 import sys
+import tempfile
 from pathlib import Path
 import json
 from datetime import datetime
@@ -147,20 +148,20 @@ def evaluate_model(model, X: pd.DataFrame, y: pd.Series, split_name: str) -> dic
     return metrics
 
 
-def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.DataFrame,run_id: str, metrics: dict) -> None:
+def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.DataFrame,run_id: str, metrics: dict, output_dir: Path = ARTIFACTS_DIR) -> None:
     """Save model, preprocessor, reference data, and metrics."""
-    ARTIFACTS_DIR.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
 
-    joblib.dump(model, ARTIFACTS_DIR / "model.pkl")
-    joblib.dump(preprocessor, ARTIFACTS_DIR / "preprocessor.pkl")
-    X_train.to_csv(ARTIFACTS_DIR / "reference.csv", index=False)
+    joblib.dump(model, output_dir / "model.pkl")
+    joblib.dump(preprocessor, output_dir / "preprocessor.pkl")
+    X_train.to_csv(output_dir / "reference.csv", index=False)
 
-    with open(ARTIFACTS_DIR / "metrics.json", "w", encoding="utf-8") as f:
+    with open(output_dir / "metrics.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=4)
 
-    with open(ARTIFACTS_DIR / "preprocessing_artifact.json", "w", encoding="utf-8") as f:
+    with open(output_dir / "preprocessing_artifact.json", "w", encoding="utf-8") as f:
         json.dump(preprocessor.get_artifact().to_dict(), f, indent=4)
-    with open(ARTIFACTS_DIR / "model_info.json", "w", encoding="utf-8") as f:
+    with open(output_dir / "model_info.json", "w", encoding="utf-8") as f:
         json.dump({
             "model_type": model.named_steps["classifier"].__class__.__name__,
             "version": "0.1.0",
@@ -170,14 +171,14 @@ def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.Data
             "average_precision": metrics["test"]["average_precision"],
         },f, indent=4)
 
-    mlflow.log_artifact(str(ARTIFACTS_DIR / "preprocessor.pkl"), artifact_path="preprocessor")
-    mlflow.log_artifact(str(ARTIFACTS_DIR / "reference.csv"), artifact_path="reference")
-    mlflow.log_artifact(str(ARTIFACTS_DIR / "preprocessing_artifact.json"), artifact_path="preprocessor")
-    mlflow.log_artifact(str(ARTIFACTS_DIR / "model_info.json"), artifact_path="model_info")
+    mlflow.log_artifact(str(output_dir / "preprocessor.pkl"), artifact_path="preprocessor")
+    mlflow.log_artifact(str(output_dir / "reference.csv"), artifact_path="reference")
+    mlflow.log_artifact(str(output_dir / "preprocessing_artifact.json"), artifact_path="preprocessor")
+    mlflow.log_artifact(str(output_dir / "model_info.json"), artifact_path="model_info")
     
 
 
-def train_candidate() -> dict[str, str]:
+def train_candidate(persist_local_artifacts: bool = True) -> dict[str, str]:
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
@@ -212,11 +213,19 @@ def train_candidate() -> dict[str, str]:
             "test_average_precision": test_metrics["average_precision"],
         })
         run_id = active_run.info.run_id
-        save_artifacts(model,preprocessor, X_train,run_id,
-                       {"cross_validation":cv_metrics,
-                        "validation":val_metrics,
-                        "test":test_metrics
-                       })
+        if persist_local_artifacts:
+            save_artifacts(model,preprocessor, X_train,run_id,
+                           {"cross_validation":cv_metrics,
+                            "validation":val_metrics,
+                            "test":test_metrics
+                           })
+        else:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                save_artifacts(model,preprocessor, X_train,run_id,
+                               {"cross_validation":cv_metrics,
+                                "validation":val_metrics,
+                                "test":test_metrics
+                               }, output_dir=Path(temp_dir))
 
     client = MlflowClient()
     versions = client.search_model_versions(

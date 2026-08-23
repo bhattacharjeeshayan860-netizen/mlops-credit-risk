@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +71,24 @@ def load_champion_model_preprocessor() -> tuple:
     preprocessor= joblib.load(local_dir)
 
     return model, preprocessor
+
+def load_champion_model_info() -> dict[str, Any]:
+    mlflow = _import_mlflow()
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    client = MlflowClient()
+    model_version = client.get_model_version_by_alias(
+        name=MLFLOW_EXPERIMENT_NAME,
+        alias="champion",
+    )
+    if model_version.run_id is None:
+        raise RuntimeError("Model version has no associated run_id.")
+
+    local_path = client.download_artifacts(
+        run_id=model_version.run_id,
+        path="model_info/model_info.json",
+    )
+    with open(local_path, encoding="utf-8") as file:
+        return json.load(file)
 
 def get_champion_metrics() -> dict[str, Any]:
     mlflow = _import_mlflow()
@@ -151,7 +170,7 @@ def load_resources() -> tuple[Pipeline, CreditRiskPreprocessor, dict[str, Any]]:
     try:
         logger.info("trying MLflow.")
         _model,_preprocessor= load_champion_model_preprocessor()
-        _model_info = load_model_info()
+        _model_info = load_champion_model_info()
         logger.info("Loaded model and preprocessor from MLflow.")
 
     except Exception:
@@ -168,13 +187,34 @@ def reload_resources() -> tuple:
     try:
         logger.info("Reloading model and preprocessor from MLflow.")
         model, preprocessor = load_champion_model_preprocessor()
-        model_info = load_model_info()
+        model_info = load_champion_model_info()
         global _model, _preprocessor, _model_info
         _model, _preprocessor, _model_info = model, preprocessor, model_info
         logger.info("Reloaded model and preprocessor from MLflow.")
     except Exception:
         logger.exception("Failed to reload from MLflow.")
     return _model, _preprocessor,_model_info
+
+def update_local_fallback() -> None:
+    model, preprocessor = load_champion_model_preprocessor()
+    model_info = load_champion_model_info()
+    joblib.dump(model, ARTIFACTS_DIR / "model.pkl")
+    joblib.dump(preprocessor, ARTIFACTS_DIR / "preprocessor.pkl")
+    with open(ARTIFACTS_DIR / "model_info.json", "w", encoding="utf-8") as file:
+        json.dump(model_info, file, indent=4)
+
+    client = MlflowClient()
+    model_version = client.get_model_version_by_alias(
+        name=MLFLOW_EXPERIMENT_NAME,
+        alias="champion",
+    )
+    if model_version.run_id is None:
+        raise RuntimeError("Model version has no associated run_id.")
+    reference_path = client.download_artifacts(
+        run_id=model_version.run_id,
+        path="reference/reference.csv",
+    )
+    shutil.copyfile(reference_path, ARTIFACTS_DIR / "reference.csv")
 def make_prediction(
     input_data: dict[str, Any],
     model: Pipeline | None = None,

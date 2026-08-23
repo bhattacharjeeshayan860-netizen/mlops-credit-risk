@@ -144,5 +144,5 @@ def test_monitor_retrains_once_for_one_drift_event(monkeypatch):
     api_main.monitor_drift()
     api_main.monitor_drift()
 
-    train.assert_called_once_with()
+    train.assert_called_once_with(persist_local_artifacts=False)
     promote.assert_called_once_with("2", "candidate-run")

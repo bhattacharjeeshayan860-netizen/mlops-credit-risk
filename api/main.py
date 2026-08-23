@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
 from src.monitor import log_prediction_input, reset_prediction_log, run_drift_check
-from src.predict import load_resources, make_prediction, load_model_info, promote_if_better, reload_resources
+from src.predict import load_resources, make_prediction, load_model_info, promote_if_better, reload_resources, update_local_fallback
 from src.train import train_candidate
 
 class PredictionRequest(BaseModel):
@@ -83,13 +83,14 @@ def monitor_drift() -> dict:
         _drift_event_active = False
     elif not _drift_event_active:
         _drift_event_active = True
-        training_result = train_candidate()
+        training_result = train_candidate(persist_local_artifacts=False)
         promoted = promote_if_better(
             training_result["version"],
             training_result["run_id"],
         )
         if promoted:
             reload_resources()
+            update_local_fallback()
             reset_prediction_log()
         result["retraining"] = training_result
         result["promoted"] = promoted
