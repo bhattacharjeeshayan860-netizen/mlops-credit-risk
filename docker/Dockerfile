@@ -6,16 +6,16 @@ RUN useradd --create-home --shell /bin/bash appuser
 
 WORKDIR /app
 
-# Copy ONLY the runtime requirements file first so dependency installation is cached
-# unless requirements-api.txt itself changes.
-COPY --chown=appuser:appuser requirements-api.txt .
-RUN pip install --no-cache-dir -r requirements-api.txt
+# Copy only the Docker runtime requirements so test dependencies stay out of the image.
+COPY --chown=appuser:appuser requirements-docker.txt .
+RUN pip install --no-cache-dir -r requirements-docker.txt
 
 # Copy ONLY the files the FastAPI service needs at runtime.
-# .dockerignore blocks everything else (notebooks, data, tests, VCS, etc.).
+# .dockerignore blocks everything else that is not needed by the service.
 COPY --chown=appuser:appuser api/ ./api/
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser artifacts/ ./artifacts/
+COPY --chown=appuser:appuser data/raw/cs-training.csv ./data/raw/cs-training.csv
 
 USER appuser
 

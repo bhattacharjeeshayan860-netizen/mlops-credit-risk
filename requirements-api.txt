@@ -11,17 +11,13 @@ evidently==0.7.21
 # Data / ML core
 # Pin to the versions used when the model/preprocessor were trained to avoid
 # joblib/sklearn deserialization warnings or failures in the container.
-numpy==2.4.6
+numpy==1.26.4
 pandas==2.3.3
 scikit-learn==1.9.0
 joblib==1.5.3
 
 # MLOps / monitoring
-# NOTE: evidently is intentionally omitted here. The API code does not import it
-# yet (src/monitor.py is excluded by .dockerignore and is still a stub). It stays
-# in requirements.txt for notebook/development work; add it back to this file only
-# when drift detection is actually wired into the service.
-mlflow-skinny==2.14.1
+mlflow==2.14.1
 prometheus-client==0.25.0
 prometheus-fastapi-instrumentator==8.0.2
 

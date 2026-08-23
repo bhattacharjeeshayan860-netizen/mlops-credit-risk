@@ -25,7 +25,9 @@ PROJECT_TASK.md
 docker/
 
 # Local data / notebooks / experiment outputs
-data/
+data/*
+!data/raw/
+!data/raw/cs-training.csv
 notebooks/
 mlflow/
 mlflow-artifacts/
@@ -36,10 +38,6 @@ mlflow.db
 *.sqlite
 *.sqlite3
 *.env*
-
-# Training-only modules (the image only needs predict.py, preprocessing.py, utils.py)
-src/monitor.py
-src/train.py
 
 # Artifacts that are not required for inference
 # NOTE: reference.csv IS needed at runtime for Evidently drift detection.

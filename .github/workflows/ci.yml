@@ -1,6 +1,6 @@
 name: CI/CD #Name of the workflow
 
-on: # Triggers on push or pull request events but only for the main branch
+on: # Triggers on push or pull request events for the master branch
   push:
     branches: ["master"]
   pull_request:
@@ -22,14 +22,20 @@ jobs:
           pip install -r requirements-api.txt
       - name: Run tests
         run: python -m pytest
-      - name: Build Docker image
-        run: docker build -t shayanbhattacharjee/credit-risk-api -f docker/Dockerfile .
       - name: Login to DockerHub
         if: github.event_name=='push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME}}
           password: ${{ secrets.DOCKERHUB_TOKEN}}
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t shayanbhattacharjee/credit-risk-api:latest \
+            -t shayanbhattacharjee/credit-risk-api:${{ github.sha }} \
+            -f docker/Dockerfile .
       - name: Push Docker image to DockerHub
         if: github.event_name == 'push'
-        run: docker push shayanbhattacharjee/credit-risk-api
+        run: |
+          docker push shayanbhattacharjee/credit-risk-api:latest
+          docker push shayanbhattacharjee/credit-risk-api:${{ github.sha }}
