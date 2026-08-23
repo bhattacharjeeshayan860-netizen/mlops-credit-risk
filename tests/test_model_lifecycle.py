@@ -100,7 +100,7 @@ def test_reload_success_replaces_cached_resources(monkeypatch):
         "load_champion_model_preprocessor",
         lambda: (new_model, new_preprocessor),
     )
-    monkeypatch.setattr(predict, "load_model_info", lambda: new_info)
+    monkeypatch.setattr(predict, "load_champion_model_info", lambda: new_info)
 
     result = predict.reload_resources()
 
