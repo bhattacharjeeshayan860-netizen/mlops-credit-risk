@@ -46,6 +46,10 @@ def load_prediction_log() -> pd.DataFrame:
         return pd.read_csv(FILE_PATH)
     else:
         return pd.DataFrame()  # Return an empty DataFrame if the file doesn't exist
+
+def reset_prediction_log() -> None:
+    if FILE_PATH.exists():
+        FILE_PATH.unlink()
     
 def run_drift_check() -> dict:
     """Run drift detection between reference data and recent API requests."""

@@ -12,8 +12,9 @@ from typing import Optional
 from fastapi import FastAPI
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
-from src.monitor import log_prediction_input, run_drift_check
-from src.predict import load_resources, make_prediction, load_model_info
+from src.monitor import log_prediction_input, reset_prediction_log, run_drift_check
+from src.predict import load_resources, make_prediction, load_model_info, promote_if_better, reload_resources
+from src.train import train_candidate
 
 class PredictionRequest(BaseModel):
     """Request model for input data."""
@@ -45,6 +46,8 @@ app = FastAPI(
     version="0.1.0",
 )
 
+_drift_event_active = False
+
 Instrumentator().instrument(app).expose(app)
 @app.on_event("startup")
 def startup_event():
@@ -66,7 +69,7 @@ def predict(request: PredictionRequest)-> dict:
 @app.get("/model/info")
 def model_info()-> dict:
     """Return active model metadata."""
-    result= load_model_info()
+    result = _model_info
     if result:
         return result 
     raise ValueError("Model info does not exist.")
@@ -75,7 +78,28 @@ def model_info()-> dict:
 def monitor_drift() -> dict:
     """Run drift detection and return results."""
     result= run_drift_check()
+    global _drift_event_active
+    if not result["drift_detected"]:
+        _drift_event_active = False
+    elif not _drift_event_active:
+        _drift_event_active = True
+        training_result = train_candidate()
+        promoted = promote_if_better(
+            training_result["version"],
+            training_result["run_id"],
+        )
+        if promoted:
+            reload_resources()
+            reset_prediction_log()
+        result["retraining"] = training_result
+        result["promoted"] = promoted
     return result
+
+@app.post("/retrain")
+def retrain_model() -> dict:
+    """Trigger model retraining."""
+    return monitor_drift()
+
 @app.get("/health")
 def health() -> dict[str, str]:
     """Return service health status."""
