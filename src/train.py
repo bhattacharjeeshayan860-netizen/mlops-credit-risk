@@ -24,6 +24,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 import mlflow
 import mlflow.sklearn
+from mlflow.tracking import MlflowClient
 import logging
 from src.preprocessing import CreditRiskPreprocessor, TARGET_COLUMN
 from src.utils import (MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME, MLFLOW_ARTIFACT_PATH)
@@ -179,12 +180,11 @@ def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.Data
     
 
 
-def main() -> None:
-    """Run the full training pipeline."""
+def train_candidate() -> dict[str, str]:
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
-    with mlflow.start_run():
+    with mlflow.start_run() as active_run:
         df=load_data()
         mlflow.set_tag("dataset", "Give Me Some Credit")
         X_train_raw, X_val_raw,X_test_raw, y_train, y_val, y_test= split_data(df)
@@ -200,9 +200,11 @@ def main() -> None:
         mlflow.log_params(model.named_steps["classifier"].get_params())
         mlflow.log_param("train_time", train_time)
 
-        mlflow.sklearn.log_model(sk_model=model,
-                                 artifact_path=MLFLOW_ARTIFACT_PATH,
-                                 registered_model_name="credit_risk_model")
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            artifact_path=MLFLOW_ARTIFACT_PATH,
+            registered_model_name=MLFLOW_EXPERIMENT_NAME,
+        )
         
         val_metrics=evaluate_model(model, X_val, y_val, split_name="validation")
         test_metrics=evaluate_model(model,X_test, y_test, split_name="test")
@@ -212,11 +214,29 @@ def main() -> None:
             "test_roc_auc": test_metrics["roc_auc"],
             "test_average_precision": test_metrics["average_precision"],
         })
-        run_id=mlflow.active_run().info.run_id
+        run_id = active_run.info.run_id
         save_artifacts(model,preprocessor, X_train,run_id,
                        {"cross_validation":cv_metrics,
                         "validation":val_metrics,
                         "test":test_metrics
                        })
+
+    client = MlflowClient()
+    versions = client.search_model_versions(
+        f"name='{MLFLOW_EXPERIMENT_NAME}'"
+    )
+    candidate_versions = [version for version in versions if version.run_id == run_id]
+    if not candidate_versions:
+        raise RuntimeError("The trained model was not registered in MLflow.")
+
+    candidate_version = max(candidate_versions, key=lambda version: int(version.version))
+    return {
+        "run_id": run_id,
+        "version": str(candidate_version.version),
+    }
+
+def main() -> None:
+    """Run the full training pipeline."""
+    train_candidate()
 if __name__ == "__main__":
     main()
