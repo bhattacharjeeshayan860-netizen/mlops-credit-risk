@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
@@ -41,7 +41,12 @@ class PreprocessingArtifact:
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation of the artifact."""
-        return asdict(self)
+        return {
+            "medians": self.medians,
+            "clip_upper_bounds": self.clip_upper_bounds,
+            "past_due_caps": self.past_due_caps,
+            "feature_columns": self.feature_columns,
+        }
 
 
 class CreditRiskPreprocessor(BaseEstimator, TransformerMixin):
