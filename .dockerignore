@@ -26,6 +26,7 @@ docker/
 
 # Local data / notebooks / experiment outputs
 data/*
+!data/
 !data/raw/
 !data/raw/cs-training.csv
 notebooks/
