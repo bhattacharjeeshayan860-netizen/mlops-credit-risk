@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import FastAPI
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
-from src.monitor import log_prediction_input, reset_prediction_log, run_drift_check
+from src.monitor import log_prediction, reset_prediction_log, run_drift_check, get_monitoring_stats
 from src.predict import load_resources, make_prediction, load_model_info, promote_if_better, reload_resources, update_local_fallback
 from src.train import train_candidate
 
@@ -60,8 +60,8 @@ def predict(request: PredictionRequest)-> dict:
     """Return the object (predictionRequest) as a dictionary."""
     prediction_input= request.model_dump()
     
-    result,monitoring_data= make_prediction(prediction_input, model=_model, preprocessor=_preprocessor)
-    log_prediction_input(monitoring_data)
+    result, monitoring_data = make_prediction(prediction_input, model=_model, preprocessor=_preprocessor)
+    log_prediction(monitoring_data, result)
     PREDICTION_COUNT.labels(risk_label=result["risk_label"]).inc()
     PREDICTION_HISTOGRAM.observe(result["default_probability"])
     return result
@@ -101,7 +101,24 @@ def retrain_model() -> dict:
     """Trigger model retraining."""
     return monitor_drift()
 
+@app.get("/monitoring/stats")
+def get_monitoring_stats() -> dict:
+    """Return summary statistics from the prediction log."""
+    return get_monitoring_stats()
+
+@app.get("/ready")
+def ready() -> dict[str, str]:
+    """Return readiness status (process alive AND model loaded)."""
+    try:
+        from src.predict import _model
+        if _model is not None:
+            return {"status": "ready"}
+        return {"status": "not_ready", "detail": "Model not yet loaded"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
 @app.get("/health")
 def health() -> dict[str, str]:
     """Return service health status."""
     return {"status": "ok"}
+
