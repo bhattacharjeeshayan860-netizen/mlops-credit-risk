@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --bg-page: #f4f7fb;
-  --bg-panel: rgba(255, 255, 255, 0.82);
-  --text: #0f172a;
-  --muted: #475569;
-  --line: #e2e8f0;
-  --teal: #14b8a6;
-  --teal-soft: #dffaf6;
-  --sky: #38bdf8;
-  --indigo: #6366f1;
-  --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.06);
+  --bg-page: #f5f7f6;
+  --bg-panel: #ffffff;
+  --text: #17201d;
+  --muted: #687570;
+  --line: #dfe7e2;
+  --teal: #0f766e;
+  --teal-soft: #e4f3ef;
+  --ink: #17332e;
+  --lime: #d9ef68;
+  --shadow-soft: 0 18px 40px rgba(23, 51, 46, 0.07);
 }
 
 html {
@@ -21,11 +21,14 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(20, 184, 166, 0.08), transparent 22%),
-    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.08), transparent 28%),
+    linear-gradient(rgba(15, 118, 110, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 118, 110, 0.025) 1px, transparent 1px),
     var(--bg-page);
+  background-size: 32px 32px;
   color: var(--text);
-  font-family: Inter, "Segoe UI", sans-serif;
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -34,6 +37,18 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+h1, h2, h3, p {
+  margin-top: 0;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.03em;
+}
+
+button, a, input {
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 button,
@@ -50,8 +65,7 @@ textarea {
 @layer utilities {
   .glass-panel {
     background: var(--bg-panel);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    border: 1px solid var(--line);
     box-shadow: var(--shadow-soft);
   }
 }

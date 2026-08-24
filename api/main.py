@@ -8,13 +8,16 @@ Planned endpoints:
 - GET /model/info: active model metadata
 """
 from pydantic import BaseModel
-from typing import Optional
-from fastapi import FastAPI
+from typing import Optional, Any
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
-from src.monitor import log_prediction, reset_prediction_log, run_drift_check, get_monitoring_stats
+from src.monitor import log_prediction, reset_prediction_log, run_drift_check, get_monitoring_stats as calculate_monitoring_stats
 from src.predict import load_resources, make_prediction, load_model_info, promote_if_better, reload_resources, update_local_fallback
+from src.utils import MLFLOW_TRACKING_URI
 from src.train import train_candidate
+import mlflow
 
 class PredictionRequest(BaseModel):
     """Request model for input data."""
@@ -46,6 +49,23 @@ app = FastAPI(
     version="0.1.0",
 )
 
+_model = None
+_preprocessor = None
+_model_info = None
+
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
 _drift_event_active = False
 
 Instrumentator().instrument(app).expose(app)
@@ -72,7 +92,7 @@ def model_info()-> dict:
     result = _model_info
     if result:
         return result 
-    raise ValueError("Model info does not exist.")
+    raise HTTPException(status_code=404, detail="Model info does not exist.")
 
 @app.post("/monitor")
 def monitor_drift() -> dict:
@@ -102,9 +122,9 @@ def retrain_model() -> dict:
     return monitor_drift()
 
 @app.get("/monitoring/stats")
-def get_monitoring_stats() -> dict:
+def monitoring_stats_endpoint() -> dict:
     """Return summary statistics from the prediction log."""
-    return get_monitoring_stats()
+    return calculate_monitoring_stats()
 
 @app.get("/ready")
 def ready() -> dict[str, str]:
@@ -122,3 +142,34 @@ def health() -> dict[str, str]:
     """Return service health status."""
     return {"status": "ok"}
 
+@app.get("/system/status")
+def system_status() -> dict:
+    """Return a comprehensive system health status."""
+    results = {
+        "api": {"status": "operational", "detail": "API is running"},
+        "model": {"status": "operational", "detail": "Model is loaded"},
+        "mlflow": {"status": "operational", "detail": "MLflow is reachable"},
+        "monitoring": {"status": "operational", "detail": "Monitoring is active"}
+    }
+
+    # 1. Model Check
+    if _model is None:
+        results["model"] = {"status": "failure", "detail": "Model not loaded"}
+    elif _model_info is None:
+        results["model"] = {"status": "warning", "detail": "Model loaded but metadata missing"}
+
+    # 2. Monitoring Check
+    try:
+        calculate_monitoring_stats()
+    except Exception as e:
+        results["monitoring"] = {"status": "failure", "detail": str(e)}
+
+    # 3. MLflow Check
+    try:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        client = mlflow.tracking.MlflowClient()
+        client.search_experiments()
+    except Exception as e:
+        results["mlflow"] = {"status": "warning", "detail": f"MLflow connectivity issue: {str(e)}"}
+
+    return results
