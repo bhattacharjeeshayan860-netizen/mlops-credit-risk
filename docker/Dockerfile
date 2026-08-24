@@ -15,16 +15,11 @@ COPY --chown=appuser:appuser requirements-docker.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements-docker.txt
 
-# Copy only the runtime code and artifacts needed by the API.
-# The app supports MLflow-first loading with a local fallback, and drift-triggered
-# retraining still reads the raw training CSV from data/raw/cs-training.csv.
+# Copy only the app code and runtime dependencies.
+# The production API prefers MLflow model artifacts and does not require local
+# generated artifacts or the raw training CSV to be baked into the image.
 COPY --chown=appuser:appuser api/ ./api/
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser data/raw/cs-training.csv ./data/raw/cs-training.csv
-COPY --chown=appuser:appuser artifacts/model.pkl ./artifacts/model.pkl
-COPY --chown=appuser:appuser artifacts/preprocessor.pkl ./artifacts/preprocessor.pkl
-COPY --chown=appuser:appuser artifacts/model_info.json ./artifacts/model_info.json
-COPY --chown=appuser:appuser artifacts/reference.csv ./artifacts/reference.csv
 
 USER appuser
 
