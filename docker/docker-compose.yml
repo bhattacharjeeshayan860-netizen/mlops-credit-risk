@@ -1,32 +1,25 @@
-# Local MLOps stack for the project.
-#
-# Planned services:
-# - fastapi-app: real-time inference API
-# - mlflow-server: experiment tracking and model registry
-# - prometheus: metrics scraper
-# - grafana: dashboard visualization
-
 services:
   fastapi-app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-
+    restart: unless-stopped
     ports:
       - "${FASTAPI_PORT:-8000}:8000"
-
     env_file:
       - ../.env
-
     environment:
       MLFLOW_TRACKING_URI: "http://mlflow-server:5000"
-
+    volumes:
+      - ../artifacts:/app/artifacts
+      - ../reports:/app/reports
     depends_on:
       mlflow-server:
         condition: service_healthy
-
+      bootstrap:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready').read()"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -34,67 +27,114 @@ services:
 
   mlflow-server:
     image: ghcr.io/mlflow/mlflow:v2.14.1
-
+    restart: unless-stopped
     command: >
       mlflow server
       --backend-store-uri sqlite:////mlflow/db/mlflow.db
       --default-artifact-root /mlflow/artifacts
       --host 0.0.0.0
       --port 5000
-
     ports:
-      - "${MLFLOW_PORT:-5000}:5000"
-
+      - "127.0.0.1:${MLFLOW_PORT:-5000}:5000"
     volumes:
       - ../mlflow-artifacts:/mlflow/artifacts
       - ../mlflow-db:/mlflow/db
-
     healthcheck:
       test: [
-       "CMD",
-       "python",
-       "-c",
-       "import urllib.request; urllib.request.urlopen('http://localhost:5000').read()"
+        "CMD",
+        "python",
+        "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:5000').read()"
       ]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 15s
 
+  bootstrap:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      MLFLOW_TRACKING_URI: "http://mlflow-server:5000"
+    volumes:
+      - ../artifacts:/app/artifacts
+      - ../reports:/app/reports
+      - ../data:/app/data
+    depends_on:
+      mlflow-server:
+        condition: service_healthy
+    command: python scripts/bootstrap.py
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_TOKEN: "${API_AUTH_TOKEN:-}"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      fastapi-app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    profiles: ["production"]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: "${DOMAIN:-localhost}"
+      API_AUTH_TOKEN: "${API_AUTH_TOKEN:-}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+      fastapi-app:
+        condition: service_healthy
+
   prometheus:
     image: prom/prometheus:v2.50.0
-
+    restart: unless-stopped
     ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
-
     depends_on:
       fastapi-app:
         condition: service_healthy
 
   grafana:
     image: grafana/grafana:11.6.0
-
+    restart: unless-stopped
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     env_file:
       - ../.env
-
     environment:
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
-
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-change-me}"
     volumes:
       - grafana-data:/var/lib/grafana
-
     depends_on:
       - prometheus
 
 volumes:
   grafana-data:
+  caddy-data:
+  caddy-config:

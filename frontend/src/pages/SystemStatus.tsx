@@ -46,7 +46,7 @@ export default function SystemStatus() {
   };
 
   useEffect(() => {
-    checkAll();
+    void Promise.resolve().then(checkAll);
   }, []);
 
   const getStatusVariant = (status: string) => {

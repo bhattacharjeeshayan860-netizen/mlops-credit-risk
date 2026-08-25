@@ -1,0 +1,12 @@
+{$DOMAIN} {
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy fastapi-app:8000 {
+            header_up X-API-Key {$API_AUTH_TOKEN}
+        }
+    }
+
+    handle {
+        reverse_proxy frontend:80
+    }
+}

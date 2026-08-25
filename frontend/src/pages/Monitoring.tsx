@@ -20,24 +20,45 @@ interface SystemStatusResponse {
   monitoring: { status: string; detail: string };
 }
 
+interface LatestReportResponse {
+  report_name: string;
+}
+
 export default function Monitoring() {
   const [stats, setStats] = React.useState<MonitoringStats | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [driftStatus, setDriftStatus] = React.useState<SystemStatusResponse['monitoring'] | null>(null);
+  const [latestReport, setLatestReport] = React.useState<string | null>(null);
 
   const fetchStats = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get<MonitoringStats>(`${API_URL}/monitoring/stats`);
-      setStats(response.data);
-      try {
-        const statusResponse = await axios.get<SystemStatusResponse>(`${API_URL}/system/status`);
-        setDriftStatus(statusResponse.data.monitoring);
-      } catch {
+      const [statsRes, statusRes, reportRes] = await Promise.allSettled([
+        axios.get<MonitoringStats>(`${API_URL}/monitoring/stats`),
+        axios.get<SystemStatusResponse>(`${API_URL}/system/status`),
+        axios.get<LatestReportResponse>(`${API_URL}/reports/latest`)
+      ]);
+
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value.data);
+      } else {
+        throw statsRes.reason;
+      }
+
+      if (statusRes.status === 'fulfilled') {
+        setDriftStatus(statusRes.value.data.monitoring);
+      } else {
         setDriftStatus({ status: 'unknown', detail: 'Status check unavailable' });
       }
+
+      if (reportRes.status === 'fulfilled') {
+        setLatestReport(reportRes.value.data.report_name);
+      } else {
+        setLatestReport(null);
+      }
+
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Unable to fetch monitoring data.');
     } finally {
@@ -46,8 +67,14 @@ export default function Monitoring() {
   };
 
   React.useEffect(() => {
-    fetchStats();
+    void Promise.resolve().then(fetchStats);
   }, []);
+
+  const handleViewReport = () => {
+    if (latestReport) {
+      window.open(`${API_URL}/reports/${latestReport}`, '_blank');
+    }
+  };
 
   if (loading && !stats) {
     return (
@@ -159,8 +186,13 @@ export default function Monitoring() {
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Summary</p>
                 <p className="text-sm text-slate-700">{driftStatus?.detail || 'Checking monitoring pipeline...'}</p>
               </div >
-              <Button variant="outline" className="w-full text-xs">
-                View drift report
+              <Button 
+                variant="outline" 
+                className="w-full text-xs"
+                onClick={handleViewReport}
+                disabled={!latestReport}
+              >
+                {latestReport ? 'View drift report' : 'No report available'}
               </Button>
             </div >
           </Card>

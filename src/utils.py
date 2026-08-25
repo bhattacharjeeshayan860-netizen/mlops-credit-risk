@@ -5,11 +5,15 @@ saving JSON artifacts, validating feature order, and managing project paths.
 """
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 
 load_dotenv()
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 
 # Keep MLflow client calls fast-fail when the tracking server is not reachable
 # (e.g. during local testing / CI before mlflow-server is up). The FastAPI

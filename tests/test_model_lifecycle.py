@@ -137,6 +137,7 @@ def test_monitor_retrains_once_for_one_drift_event(monkeypatch):
     train = Mock(return_value={"version": "2", "run_id": "candidate-run"})
     promote = Mock(return_value=False)
 
+    monkeypatch.setattr(api_main, "API_AUTH_TOKEN", None)
     monkeypatch.setattr(api_main, "run_drift_check", lambda: drift_result)
     monkeypatch.setattr(api_main, "train_candidate", train)
     monkeypatch.setattr(api_main, "promote_if_better", promote)

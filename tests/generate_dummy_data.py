@@ -108,7 +108,6 @@ def generate_dummy_data():
         print(f"  Missing: {missing_rate:.4f}")
 
     print("\n--- Comparison with Reference ---")
-    ref_stats = ref_df[cols_order].describe().loc[['mean', 'min', 'max']]
     # Note: ref_df might have different columns or types, but we use cols_order
     # We'll just print a few key ones to show it's working.
     print("Reference Means for key features:")

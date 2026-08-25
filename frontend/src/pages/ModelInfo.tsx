@@ -48,7 +48,7 @@ export default function ModelInfo() {
   };
 
   useEffect(() => {
-    fetchModelInfo();
+    void Promise.resolve().then(fetchModelInfo);
   }, []);
 
   if (loading) {

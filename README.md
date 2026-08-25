@@ -48,10 +48,10 @@ graph TD
 | **FastAPI Inference API** | ✅ Implemented |
 | **Prometheus Metrics Integration** | ✅ Implemented |
 | **Grafana Dashboard Support** | ✅ Implemented |
-| **Evidently Drift Detection** | ✅ Implemented, manually triggered |
+| **Evidently Drift Detection** | ✅ Implemented |
 | **Dockerized Stack** | ✅ Implemented |
-| **Frontend Dashboard** | ⏳ Planned |
-| **Automated Retraining Loop** | ⏳ Planned |
+| **Frontend Dashboard** | ✅ Implemented |
+| **Automated Retraining Loop** | ✅ Implemented |
 | **Authentication & HTTPS** | ⏳ Planned |
 
 ---
@@ -87,16 +87,12 @@ graph TD
    pip install -r requirements.txt
    ```
 
-4. **Train the model**
-   First, ensure an MLflow server is running to receive logs:
+4. **Bootstrap the environment (First time only)**
+   Ensure your `.env` is created and MLflow is running, then run:
    ```bash
-   # Using Docker to run only the MLflow server
-   docker compose -f docker/docker-compose.yml up -d mlflow-server
-
-   # Run the training script
-   python src/train.py
+   python scripts/bootstrap.py
    ```
-   *Note: The API is designed to fall back to local `artifacts/` if the MLflow server is unavailable.*
+   *This will train a baseline model and register it in MLflow.*
 
 5. **Start the Inference API**
    ```bash
@@ -109,10 +105,12 @@ graph TD
    ```
 
 ### Docker Compose (Full Stack)
-Launch the entire MLOps stack (API, MLflow, Prometheus, Grafana) with one command:
+
+Launch the entire MLOps stack (including Bootstrap, API, Frontend, MLflow, Prometheus, and Grafana) with one command:
 ```bash
 docker compose -f docker/docker-compose.yml up -d --build
 ```
+*The `bootstrap` service will automatically run first to ensure a model is available.*
 
 ---
 
@@ -125,8 +123,10 @@ The inference service is available at `http://localhost:8000`.
 | Method | Endpoint | Purpose |
 | :--- | :--- | :--- |
 | `GET` | `/health` | Service health check. |
+| `GET` | `/ready` | Readiness check (checks if model is loaded). |
 | `POST` | `/predict` | Returns a credit-risk prediction and probability. |
 | `GET` | `/model/info` | Returns metadata of the currently loaded model. |
+| `GET` | `/reports/latest` | Returns the filename of the latest drift report. |
 | `POST` | `/monitor` | Triggers a drift detection report. |
 | `GET` | `/metrics` | Prometheus scrape endpoint for API metrics. |
 
@@ -148,17 +148,6 @@ The inference service is available at `http://localhost:8000`.
 }
 ```
 
-**Response (Example; values will vary depending on the loaded model and input):**
-```json
-{
-  "prediction": 0,
-  "default_probability": 0.042,
-  "risk_label": "low_risk",
-  "model_version": "0.1.0",
-  "mlflow_run_id": "abc123def456"
-}
-```
-
 ---
 
 ## ⚙️ Configuration
@@ -167,6 +156,9 @@ Create a `.env` file in the root directory.
 
 **`.env.example` content:**
 ```env
+# CORS Configuration (Comma-separated origins)
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
 # API Configuration
 FASTAPI_PORT=8000
 
@@ -189,7 +181,9 @@ GRAFANA_ADMIN_PASSWORD=change-me
 
 | Service | Port | Description |
 | :--- | :--- | :--- |
+| `bootstrap` | N/A | One-shot service to train/register initial model |
 | `fastapi-app` | `8000` | Real-time inference API |
+| `frontend` | `80` | Production-ready web dashboard (Nginx) |
 | `mlflow-server` | `5000` | Experiment tracking and registry |
 | `prometheus` | `9090` | Metrics scraper |
 | `grafana` | `3000` | Dashboard visualization |
@@ -205,7 +199,7 @@ To deploy this stack on a cloud instance:
    git clone <repository-url>
    cd mloops
    cp .env.example .env
-   nano .env  # Update for production (e.g., change GRAFANA_ADMIN_PASSWORD)
+   nano .env  # Update for production (e.g., change GRAFANA_ADMIN_PASSWORD, CORS_ORIGINS)
    ```
 
 2. **Launch Stack**
@@ -213,17 +207,29 @@ To deploy this stack on a cloud instance:
    docker compose -f docker/docker-compose.yml up -d --build
    ```
 
+   For a public HTTPS deployment, set `DOMAIN` to a DNS name pointing to the
+   server, set strong `API_AUTH_TOKEN` and `GRAFANA_ADMIN_PASSWORD` values, and
+   start the Caddy profile:
+   ```bash
+   docker compose --profile production -f docker/docker-compose.yml up -d --build
+   ```
+   Caddy obtains and renews the TLS certificate automatically. Open ports 80
+   and 443 in the firewall; MLflow, Prometheus, and Grafana remain bound to
+   localhost.
+
 3. **Verify Health**
    ```bash
    docker compose -f docker/docker-compose.yml ps
    curl http://localhost:8000/health
+   curl http://localhost/
+   curl http://localhost:8000/ready
    ```
 
 4. **Persistence & Storage**
    The following storage mechanisms are in place:
    - **MLflow database and artifacts**: Persisted through bind mounts.
    - **Grafana data**: Persisted through a named Docker volume (`grafana-data`).
-   - **API artifacts**: Currently bundled into the Docker image.
+   - **API artifacts & reports**: Persisted through bind mounts.
 
 5. **Maintenance**
    - **View logs**: `docker compose -f docker/docker-compose.yml logs fastapi-app`
@@ -234,12 +240,12 @@ To deploy this stack on a cloud instance:
 ## 🛡️ Production Checklist
 
 - [ ] **HTTPS/TLS**: Use a reverse proxy (Nginx/Traefik) with Let's Encrypt.
-- [ ] **Authentication**: Secure `/predict` and `/monitor` endpoints.
+- [ ] **Authentication**: Secure `/predict` and `/monitor` endpoints via reverse proxy auth.
 - [ ] **CORS**: Restrict access to your specific frontend domain.
 - [ ] **Rate Limiting**: Prevent API abuse.
 - [ ] **Secret Management**: Use a secure vault instead of plain `.env` files.
-- [ ] **Backups**: Schedule regular backups of MLflow bind-mounted directories.
-- [ ] **Drift Reporting**: Map the `reports/` directory to a persistent volume to view drift reports.
+- [ ] **Backups**: Schedule regular backups of MLflow and API artifact bind-mounted directories.
+- [ ] **Drift Reporting**: Reports are served via `/api/reports/`. Ensure this path is secure.
 
 ---
 
@@ -248,10 +254,10 @@ To deploy this stack on a cloud instance:
 | Issue | Likely Cause | Solution |
 | :--- | :--- | :--- |
 | **MLflow connection failures** | `MLFLOW_TRACKING_URI` mismatch | Check `.env` and ensure `mlflow-server` is running |
-| **Missing model artifacts** | Model not yet trained | Run `python src/train.py` |
+| **Missing model artifacts** | Bootstrap failed or skipped | Check `docker compose logs bootstrap` |
 | **API startup failures** | Port conflict or dependency error | Check `docker logs fastapi-app` |
-| **Docker health-check fails** | FastAPI service taking too long to start | Increase `start_period` in `docker-compose.yml` |
-| **Empty drift logs** | Not enough prediction data collected | Log at least 1,000 requests to `prediction_log.csv` |
+| **Docker health-check fails** | Service taking too long to start | Increase `start_period` in `docker-compose.yml` |
+| **Frontend cannot reach API** | `VITE_API_URL` or CORS mismatch | Check `.env` and Nginx configuration |
 
 ---
 

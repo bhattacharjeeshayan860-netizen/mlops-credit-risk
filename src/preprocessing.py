@@ -60,8 +60,9 @@ class CreditRiskPreprocessor(BaseEstimator, TransformerMixin):
     def __init__(self, clip_quantile: float = 0.99) -> None:
         self.clip_quantile = clip_quantile
 
-    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> "CreditRiskPreprocessor":
+    def fit(self, X: pd.DataFrame, _y: pd.Series | None = None) -> "CreditRiskPreprocessor":
         """Learn medians, outlier caps, and final feature order."""
+        del _y
         df = self._prepare_base_frame(X)
 
         self.artifact_ = PreprocessingArtifact()

@@ -26,12 +26,10 @@ from sklearn.preprocessing import StandardScaler
 import mlflow
 import mlflow.sklearn
 from mlflow.tracking import MlflowClient
-import logging
 from src.preprocessing import CreditRiskPreprocessor, TARGET_COLUMN
-from src.utils import (MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME, MLFLOW_ARTIFACT_PATH)
+from src.utils import ARTIFACTS_DIR, MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME, MLFLOW_ARTIFACT_PATH
 
 DATA_PATH = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
-ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 RANDOM_STATE = 42
 
 

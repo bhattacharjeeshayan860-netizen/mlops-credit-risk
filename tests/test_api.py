@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -27,7 +27,6 @@ def client(monkeypatch):
         "trained_at": "test",
     }
     monkeypatch.setattr(api_main, "load_resources", lambda: (model, preprocessor, model_info))
-    monkeypatch.setattr(api_main, "load_model_info", lambda: model_info)
 
     with TestClient(api_main.app) as test_client:
         yield test_client
@@ -54,7 +53,11 @@ def test_inference_endpoint_returns_prediction(client) -> None:
         "NumberOfTime60_89DaysPastDueNotWorse": 0,
         "NumberOfDependents": 2,
     }
-    response = client.post("/predict", json=prediction_input)
+    response = client.post(
+        "/predict",
+        json=prediction_input,
+        headers={"X-API-Key": api_main.API_AUTH_TOKEN or ""},
+    )
     assert response.status_code == 200
 
     data = response.json()

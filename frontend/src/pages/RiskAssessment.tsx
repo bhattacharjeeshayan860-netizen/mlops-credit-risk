@@ -9,6 +9,9 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_HEADERS = import.meta.env.VITE_API_TOKEN
+  ? { 'X-API-Key': import.meta.env.VITE_API_TOKEN }
+  : undefined;
 
 export default function RiskAssessment() {
   const [loading, setLoading] = useState(false);
@@ -40,7 +43,7 @@ export default function RiskAssessment() {
     setResult(null);
 
     try {
-      const response = await axios.post<PredictionResponse>(`${API_URL}/predict`, formData);
+      const response = await axios.post<PredictionResponse>(`${API_URL}/predict`, formData, { headers: API_HEADERS });
       setResult(response.data);
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'An unexpected error occurred');

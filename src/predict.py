@@ -1,38 +1,25 @@
-"""Prediction utilities shared by the FastAPI service.
-
-This module loads the trained model and preprocessing artifacts from MLflow
-(or from a local fallback), applies inference-time preprocessing, and returns
-prediction probabilities.
-"""
-from __future__ import annotations
-
-import json
 import logging
 import os
+import json
 import shutil
-from pathlib import Path
 from typing import Any
 
 import joblib
-import mlflow
-from mlflow.tracking import MlflowClient
 import pandas as pd
 from sklearn.pipeline import Pipeline
+from mlflow.tracking import MlflowClient
 
 from src.preprocessing import CreditRiskPreprocessor
-from src.utils import MLFLOW_ARTIFACT_PATH, MLFLOW_EXPERIMENT_NAME, MLFLOW_TRACKING_URI
+from src.utils import ARTIFACTS_DIR, MLFLOW_EXPERIMENT_NAME, MLFLOW_TRACKING_URI
 
-
-def _import_mlflow():
+def _import_mlflow() -> Any:
     """Lazy-import MLflow so the API can start without it when using local artifacts."""
     import mlflow
-    import mlflow.sklearn  # noqa: F401
+    import mlflow.sklearn as mlflow_sklearn
+    del mlflow_sklearn
     return mlflow
 
 logger = logging.getLogger(__name__)
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 
 DEFAULT_THRESHOLD = 0.5
 
@@ -41,40 +28,42 @@ _model: Pipeline | None = None
 _preprocessor: CreditRiskPreprocessor | None = None
 _model_info: dict[str, Any] | None = None
 
-def load_champion_model_preprocessor() -> tuple:
+def load_champion_model_preprocessor() -> tuple[Pipeline, CreditRiskPreprocessor]:
     """Load the champion model and preprocessor from MLflow.
 
     Returns:
         tuple: A tuple containing the loaded model and preprocessor.
     """
-    mlflow= _import_mlflow()
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    Client= MlflowClient()
+    mlflow_module = _import_mlflow()
+    mlflow_module.set_tracking_uri(MLFLOW_TRACKING_URI)
+    client = MlflowClient()
 
     try:
-        model_version= Client.get_model_version_by_alias(name= MLFLOW_EXPERIMENT_NAME,alias= "champion")
+        model_version = client.get_model_version_by_alias(name=MLFLOW_EXPERIMENT_NAME, alias="champion")
     except Exception as e:
         logger.error(f"Failed to retrieve champion model version from MLflow: {e}")
         raise RuntimeError("Failed to retrieve champion model version from MLflow.")
+    
     if model_version.run_id is None:
         raise RuntimeError("Model version has no associated run_id.")
-    run_id= model_version.run_id
-    version_num=model_version.version
+    
+    run_id = model_version.run_id
+    version_num = model_version.version
     print(f"Loading Champion Version: {version_num} (Run ID: {run_id})")
-    model_uri= f"models:/{MLFLOW_EXPERIMENT_NAME}@champion"
-    model= mlflow.sklearn.load_model(model_uri)
+    model_uri = f"models:/{MLFLOW_EXPERIMENT_NAME}@champion"
+    model = mlflow_module.sklearn.load_model(model_uri)
 
     # Load the preprocessor artifact from the same run
-    local_dir= Client.download_artifacts(run_id=run_id, path="preprocessor/preprocessor.pkl")
+    local_dir = client.download_artifacts(run_id=run_id, path="preprocessor/preprocessor.pkl")
     if not os.path.exists(local_dir):
         raise FileNotFoundError(f"Preprocessor artifact not found at {local_dir}")
-    preprocessor= joblib.load(local_dir)
+    preprocessor = joblib.load(local_dir)
 
     return model, preprocessor
 
 def load_champion_model_info() -> dict[str, Any]:
-    mlflow = _import_mlflow()
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow_module = _import_mlflow()
+    mlflow_module.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
     model_version = client.get_model_version_by_alias(
         name=MLFLOW_EXPERIMENT_NAME,
@@ -91,8 +80,8 @@ def load_champion_model_info() -> dict[str, Any]:
         return json.load(file)
 
 def get_champion_metrics() -> dict[str, Any]:
-    mlflow = _import_mlflow()
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow_module = _import_mlflow()
+    mlflow_module.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
 
     model_version = client.get_model_version_by_alias(
@@ -110,8 +99,8 @@ def get_champion_metrics() -> dict[str, Any]:
     }
 
 def get_candidate_metrics(run_id: str) -> dict[str, Any]:
-    mlflow = _import_mlflow()
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow_module = _import_mlflow()
+    mlflow_module.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
     run = client.get_run(run_id)
 
@@ -121,8 +110,8 @@ def get_candidate_metrics(run_id: str) -> dict[str, Any]:
     }
 
 def set_registered_model_alias(new_version: str) -> None:
-    mlflow = _import_mlflow()
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow_module = _import_mlflow()
+    mlflow_module.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
     client.set_registered_model_alias(
         MLFLOW_EXPERIMENT_NAME,
@@ -169,9 +158,10 @@ def load_resources() -> tuple[Pipeline, CreditRiskPreprocessor, dict[str, Any]]:
 
     try:
         logger.info("trying MLflow.")
-        _model,_preprocessor= load_champion_model_preprocessor()
-        _model_info = load_champion_model_info()
+        model, preprocessor = load_champion_model_preprocessor()
+        model_info = load_champion_model_info()
         logger.info("Loaded model and preprocessor from MLflow.")
+        _model, _preprocessor, _model_info = model, preprocessor, model_info
 
     except Exception:
         logger.exception("Failed to load from MLflow, falling back to local artifacts.")
@@ -182,7 +172,7 @@ def load_resources() -> tuple[Pipeline, CreditRiskPreprocessor, dict[str, Any]]:
 
     return _model, _preprocessor, _model_info
 
-def reload_resources() -> tuple:
+def reload_resources() -> tuple[Pipeline | None, CreditRiskPreprocessor | None, dict[str, Any] | None]:
     """Reload model and preprocessor from MLflow."""
     try:
         logger.info("Reloading model and preprocessor from MLflow.")
@@ -193,7 +183,7 @@ def reload_resources() -> tuple:
         logger.info("Reloaded model and preprocessor from MLflow.")
     except Exception:
         logger.exception("Failed to reload from MLflow.")
-    return _model, _preprocessor,_model_info
+    return _model, _preprocessor, _model_info
 
 def update_local_fallback() -> None:
     model, preprocessor = load_champion_model_preprocessor()
@@ -215,6 +205,7 @@ def update_local_fallback() -> None:
         path="reference/reference.csv",
     )
     shutil.copyfile(reference_path, ARTIFACTS_DIR / "reference.csv")
+
 def make_prediction(
     input_data: dict[str, Any],
     model: Pipeline | None = None,
@@ -246,5 +237,4 @@ def make_prediction(
         "mlflow_run_id": _model_info.get("mlflow_run_id") if _model_info else None,
     }
 
-
-    return result,X
+    return result, X

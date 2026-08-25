@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 # generated artifacts or the raw training CSV to be baked into the image.
 COPY --chown=appuser:appuser api/ ./api/
 COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser scripts/ ./scripts/
 
 USER appuser
 
@@ -27,6 +28,6 @@ EXPOSE 8000
 
 # Healthcheck uses the stdlib only; no curl installation needed.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready').read()"]
 
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

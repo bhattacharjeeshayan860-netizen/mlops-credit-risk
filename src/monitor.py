@@ -1,29 +1,40 @@
 from pathlib import Path
 import pandas as pd
-from evidently import Report,Dataset,DataDefinition
+from typing import Any
+from evidently import Report, Dataset, DataDefinition
 from evidently.presets import DataDriftPreset
 
 import sys
+import os
+import glob
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+REPORTS_DIR = PROJECT_ROOT / "reports"
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
-FILE_PATH=ARTIFACTS_DIR / "prediction_log.csv"
+FILE_PATH = ARTIFACTS_DIR / "prediction_log.csv"
 
-def log_prediction(prediction_input: pd.DataFrame, prediction_result: dict) -> None:
+def get_latest_drift_report() -> str | None:
+    """Returns the filename of the most recent drift report."""
+    if not REPORTS_DIR.exists():
+        return None
+    reports = glob.glob(str(REPORTS_DIR / "drift_report_*.html"))
+    if not reports:
+        return None
+    return max(reports, key=os.path.getmtime).name
+
+def log_prediction(prediction_input: pd.DataFrame, prediction_result: dict[str, Any]) -> None:
     """Logs both input features and prediction results."""
-    # Combine input and result into one DataFrame
     result_df = pd.DataFrame([prediction_result])
     log_entry = pd.concat([prediction_input.reset_index(drop=True), result_df.reset_index(drop=True)], axis=1)
     
     if FILE_PATH.exists():
         existing_data = load_prediction_log()
         log_entry = pd.concat([existing_data, log_entry], ignore_index=True)
-        total_rows = log_entry.shape[0]
-        if total_rows > 5000:  # Increased buffer for more meaningful stats
+        if len(log_entry) > 5000:
             log_entry = log_entry.tail(5000)
-
         log_entry.to_csv(FILE_PATH, index=False, header=True)
     else:
         log_entry.to_csv(FILE_PATH, index=False, header=True)
@@ -33,21 +44,19 @@ def load_reference_data() -> pd.DataFrame:
     reference_data_path = ARTIFACTS_DIR / "reference.csv"
     if reference_data_path.exists():
         return pd.read_csv(reference_data_path)
-    else:
-        return pd.DataFrame()
+    return pd.DataFrame()
 
 def load_prediction_log() -> pd.DataFrame:
     """Load the prediction log from CSV."""
     if FILE_PATH.exists():
         return pd.read_csv(FILE_PATH)
-    else:
-        return pd.DataFrame()
+    return pd.DataFrame()
 
 def reset_prediction_log() -> None:
     if FILE_PATH.exists():
         FILE_PATH.unlink()
 
-def get_monitoring_stats() -> dict:
+def get_monitoring_stats() -> dict[str, Any]:
     """Returns summary statistics from the prediction log."""
     log_df = load_prediction_log()
     if log_df.empty:
@@ -59,26 +68,21 @@ def get_monitoring_stats() -> dict:
         }
     
     total = len(log_df)
-    # Note: 'risk_label' and 'default_probability' are now logged
     high_risk_count = len(log_df[log_df['risk_label'] == 'high_risk'])
-    avg_prob = log_df['default_probability'].mean()
-    
-    # Recent volume (last 100 requests)
+    avg_prob = float(log_df['default_probability'].mean())
     recent_volume = len(log_df.tail(100))
-
+    
     return {
         "total_predictions": total,
         "high_risk_rate": float(high_risk_count / total),
-        "avg_default_probability": float(avg_prob),
+        "avg_default_probability": avg_prob,
         "recent_volume": recent_volume
     }
 
-def run_drift_check() -> dict:
+def run_drift_check() -> dict[str, Any]:
     """Run drift detection between reference data and recent API requests."""
     current_time = pd.Timestamp.now().strftime("%Y_%m_%d_%H_%M_%S")
     
-    # Only use input columns for drift detection to avoid including results in the drift check
-    # This is a common practice to detect feature drift
     NUMERIC_COLUMNS = [
         "RevolvingUtilizationOfUnsecuredLines",
         "age",
@@ -123,7 +127,7 @@ def run_drift_check() -> dict:
             "current_rows": 0,
             "message": "Recent prediction log is empty. Drift detection cannot be performed."
         }
-    elif len(recent_data_csv) < 100: # Reduced threshold for faster testing/demo purposes
+    elif len(recent_data_csv) < 100:
         return {
             "drift_detected": False,
             "drifted_columns": [],
@@ -136,7 +140,6 @@ def run_drift_check() -> dict:
         }
 
     monitoring_columns = NUMERIC_COLUMNS + CATEGORICAL_COLUMNS
-    # Ensure all required columns exist in both datasets
     available_ref = [col for col in monitoring_columns if col in reference_data_CSV.columns]
     available_recent = [col for col in monitoring_columns if col in recent_data_csv.columns]
     common_cols = list(set(available_ref) & set(available_recent))
@@ -181,7 +184,8 @@ def run_drift_check() -> dict:
     if actual_drift_share >= drift_share_threshold:
         drift_detected = True
         
-    snapshot.save_html(f"{PROJECT_ROOT}/reports/drift_report_{current_time}_{drift_detected}.html")
+    REPORTS_DIR.mkdir(exist_ok=True)
+    snapshot.save_html(str(REPORTS_DIR / f"drift_report_{current_time}_{drift_detected}.html"))
     
     return {
         "drift_detected": drift_detected,
