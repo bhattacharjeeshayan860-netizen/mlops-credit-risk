@@ -12,6 +12,11 @@ RUN useradd --create-home --shell /bin/bash appuser \
 
 WORKDIR /app
 
+# Install build dependencies for scientific libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install only the runtime dependencies the API actually imports.
 COPY --chown=appuser:appuser requirements-docker.txt .
 RUN pip install --no-cache-dir --upgrade pip \
