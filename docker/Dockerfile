@@ -6,7 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Create a non-root user and required runtime directories.
 RUN useradd --create-home --shell /bin/bash appuser \
-    && mkdir -p /app/artifacts /app/data/raw
+    && mkdir -p /app/artifacts /app/data/raw /app/reports \
+    && chown -R appuser:appuser /app/artifacts /app/data/raw /app/reports /app/reports \
+    && chown -R appuser:appuser /app/artifacts /app/data/raw /app/reports
 
 WORKDIR /app
 
