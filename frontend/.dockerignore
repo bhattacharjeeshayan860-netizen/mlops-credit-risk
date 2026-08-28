@@ -1,0 +1,8 @@
+node_modules
+dist
+dist-ssr
+.pytest_cache
+.git
+.gitignore
+*.log
+*.local
