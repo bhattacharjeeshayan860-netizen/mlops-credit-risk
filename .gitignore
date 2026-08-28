@@ -16,8 +16,6 @@ venv/
 # Data and generated artifacts
 data/raw/*
 !data/raw/.gitkeep
-artifacts/*
-!artifacts/.gitkeep
 mlflow-db/*
 !mlflow-db/.gitkeep
 grafana-data/*

@@ -1,0 +1,33 @@
+{
+    "medians": {
+        "MonthlyIncome": 5382.0,
+        "NumberOfDependents": 0.0,
+        "age": 52.0
+    },
+    "clip_upper_bounds": {
+        "RevolvingUtilizationOfUnsecuredLines": 1.0953084438899974,
+        "DebtRatio": 4977.0199999999895,
+        "MonthlyIncome": 25000.0
+    },
+    "past_due_caps": {
+        "NumberOfTime30_59DaysPastDueNotWorse": 13.0,
+        "NumberOfTime60_89DaysPastDueNotWorse": 11.0,
+        "NumberOfTimes90DaysLate": 17.0
+    },
+    "feature_columns": [
+        "RevolvingUtilizationOfUnsecuredLines",
+        "age",
+        "NumberOfTime30_59DaysPastDueNotWorse",
+        "DebtRatio",
+        "MonthlyIncome",
+        "NumberOfOpenCreditLinesAndLoans",
+        "NumberOfTimes90DaysLate",
+        "NumberRealEstateLoansOrLines",
+        "NumberOfTime60_89DaysPastDueNotWorse",
+        "NumberOfDependents",
+        "MonthlyIncomeWasMissing",
+        "NumberOfDependentsWasMissing",
+        "AgeWasInvalid",
+        "PastDueExtremeCode"
+    ]
+}

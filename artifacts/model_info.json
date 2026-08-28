@@ -1,0 +1,8 @@
+{
+    "model_type": "LogisticRegression",
+    "version": "0.1.0",
+    "trained_at": "2026-08-23 12:29:41",
+    "mlflow_run_id": "4e4f4b7f937d42c8aca7859bcdbefe97",
+    "roc_auc": 0.8543878070240329,
+    "average_precision": 0.3851099414232329
+}
