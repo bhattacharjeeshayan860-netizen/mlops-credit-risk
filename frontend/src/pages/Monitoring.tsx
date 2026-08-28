@@ -7,7 +7,7 @@ import { Card } from '../components/ui/Card';
 import { Skeleton } from '../components/ui/Skeleton';
 import { cn } from '../lib/utils';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://mlops-credit-risk.onrender.con';
+const API_URL = import.meta.env.VITE_API_URL || 'https://mlops-credit-risk.onrender.com';
 
 interface MonitoringStats {
   total_predictions: number;

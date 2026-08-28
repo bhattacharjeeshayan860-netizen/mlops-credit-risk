@@ -7,7 +7,7 @@ import { Card } from '../components/ui/Card';
 import { Skeleton } from '../components/ui/Skeleton';
 import { StatusIndicator } from '../components/StatusIndicator';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://mlops-credit-risk.onrender.con';
+const API_URL = import.meta.env.VITE_API_URL || 'https://mlops-credit-risk.onrender.com';
 
 interface ModelInfoResponse {
   model_type: string;
