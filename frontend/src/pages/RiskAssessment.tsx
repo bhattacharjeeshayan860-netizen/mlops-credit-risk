@@ -8,7 +8,7 @@ import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://mlops-credit-risk.onrender.con';
 const API_HEADERS = import.meta.env.VITE_API_TOKEN
   ? { 'X-API-Key': import.meta.env.VITE_API_TOKEN }
   : undefined;

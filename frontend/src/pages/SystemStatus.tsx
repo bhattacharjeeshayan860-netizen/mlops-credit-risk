@@ -8,7 +8,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { StatusIndicator } from '../components/StatusIndicator';
 import { cn } from '../lib/utils';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://mlops-credit-risk.onrender.con';
 
 interface SystemStatusResponse {
   api: { status: string; detail: string };
