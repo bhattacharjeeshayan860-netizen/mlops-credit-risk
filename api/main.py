@@ -99,7 +99,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-cors_origins_env = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+cors_origins_env = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,https://mlops-credit-risk-frontend.onrender.com")
 origins = [origin.strip() for origin in cors_origins_env.split(",")]
 API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN")
 
