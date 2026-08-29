@@ -8,6 +8,9 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { cn } from '../lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://mlops-credit-risk.onrender.com';
+const API_HEADERS = import.meta.env.VITE_API_TOKEN
+  ? { 'X-API-Key': import.meta.env.VITE_API_TOKEN }
+  : undefined;
 
 interface MonitoringStats {
   total_predictions: number;
@@ -82,7 +85,7 @@ export default function Monitoring() {
   const handleDriftCheck = async () => {
     setIsCheckingDrift(true);
     try {
-      const res = await axios.post<DriftCheckResult>(`${API_URL}/monitor`);
+      const res = await axios.post<DriftCheckResult>(`${API_URL}/monitor`, {}, { headers: API_HEADERS });
       setDriftResult(res.data);
     } catch (err: any) {
       console.error('Drift check failed:', err);
