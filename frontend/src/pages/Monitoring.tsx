@@ -20,6 +20,17 @@ interface SystemStatusResponse {
   monitoring: { status: string; detail: string };
 }
 
+interface DriftCheckResult {
+  drift_detected: boolean;
+  drifted_columns: string[];
+  drifted_column_count: number;
+  actual_drift_share: number;
+  drift_share_threshold: number;
+  reference_rows: number;
+  current_rows: number;
+  message: string;
+}
+
 interface LatestReportResponse {
   report_name: string;
 }
@@ -29,6 +40,8 @@ export default function Monitoring() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [driftStatus, setDriftStatus] = React.useState<SystemStatusResponse['monitoring'] | null>(null);
+  const [driftResult, setDriftResult] = React.useState<DriftCheckResult | null>(null);
+  const [isCheckingDrift, setIsCheckingDrift] = React.useState(false);
   const [latestReport, setLatestReport] = React.useState<string | null>(null);
 
   const fetchStats = async () => {
@@ -63,6 +76,19 @@ export default function Monitoring() {
       setError(err.response?.data?.detail || err.message || 'Unable to fetch monitoring data.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDriftCheck = async () => {
+    setIsCheckingDrift(true);
+    try {
+      const res = await axios.post<DriftCheckResult>(`${API_URL}/monitor`);
+      setDriftResult(res.data);
+    } catch (err: any) {
+      console.error('Drift check failed:', err);
+      // Fail gracefully as per requirements
+    } finally {
+      setIsCheckingDrift(false);
     }
   };
 
@@ -178,22 +204,55 @@ export default function Monitoring() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-500">Current state</span >
-                <Badge variant={driftStatus?.status === 'operational' ? 'success' : driftStatus?.status === 'warning' ? 'warning' : 'outline'}>
-                  {driftStatus?.status === 'operational' ? 'Healthy' : driftStatus?.status?.toUpperCase() || 'CHECKING'}
+                <Badge variant={
+                  driftResult?.drift_detected ? 'danger' : 
+                  driftStatus?.status === 'operational' ? 'success' : 
+                  driftStatus?.status === 'warning' ? 'warning' : 'outline'
+                }>
+                  {driftResult ? (driftResult.drift_detected ? 'Drift Detected' : 'Healthy') : 
+                   driftStatus?.status === 'operational' ? 'Healthy' : 
+                   driftStatus?.status?.toUpperCase() || 'CHECKING'}
                 </Badge>
               </div >
               <div className="space-y-1">
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Summary</p>
-                <p className="text-sm text-slate-700">{driftStatus?.detail || 'Checking monitoring pipeline...'}</p>
+                <p className="text-sm text-slate-700">
+                  {driftResult ? driftResult.message : (driftStatus?.detail || 'Checking monitoring pipeline...')}
+                </p>
+                {driftResult && driftResult.drifted_column_count > 0 && (
+                  <p className="text-xs text-slate-500">
+                    {driftResult.drifted_column_count} drifted columns ({ (driftResult.actual_drift_share * 100).toFixed(1) }%)
+                  </p>
+                )}
               </div >
-              <Button 
-                variant="outline" 
-                className="w-full text-xs"
-                onClick={handleViewReport}
-                disabled={!latestReport}
-              >
-                {latestReport ? 'View drift report' : 'No report available'}
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button 
+                  variant="outline" 
+                  className="w-full text-xs"
+                  onClick={handleViewReport}
+                  disabled={!latestReport || isCheckingDrift}
+                >
+                  {latestReport ? 'View drift report' : 'No report available'}
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  className="w-full text-xs"
+                  onClick={handleDriftCheck}
+                  disabled={isCheckingDrift}
+                >
+                  {isCheckingDrift ? (
+                    <>
+                      <RefreshCw size={14} className="mr-2 animate-spin" />
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw size={14} className="mr-2" />
+                      Run Drift Check
+                    </>
+                  )}
+                </Button>
+              </div >
             </div >
           </Card>
 
