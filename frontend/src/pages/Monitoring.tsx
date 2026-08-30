@@ -32,10 +32,21 @@ interface DriftCheckResult {
   reference_rows: number;
   current_rows: number;
   message: string;
+  last_checked?: string;
+  per_column_drift_scores?: Record<string, number>;
+  report_link?: string;
 }
 
 interface LatestReportResponse {
   report_name: string;
+}
+
+interface ModelInfo {
+  model_type: string;
+  version: string;
+  trained_at: string;
+  roc_auc: number;
+  average_precision: number;
 }
 
 export default function Monitoring() {
@@ -46,15 +57,17 @@ export default function Monitoring() {
   const [driftResult, setDriftResult] = React.useState<DriftCheckResult | null>(null);
   const [isCheckingDrift, setIsCheckingDrift] = React.useState(false);
   const [latestReport, setLatestReport] = React.useState<string | null>(null);
+  const [modelInfo, setModelInfo] = React.useState<ModelInfo | null>(null);
 
   const fetchStats = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [statsRes, statusRes, reportRes] = await Promise.allSettled([
+      const [statsRes, statusRes, reportRes, modelRes] = await Promise.allSettled([
         axios.get<MonitoringStats>(`${API_URL}/monitoring/stats`),
         axios.get<SystemStatusResponse>(`${API_URL}/system/status`),
-        axios.get<LatestReportResponse>(`${API_URL}/reports/latest`)
+        axios.get<LatestReportResponse>(`${API_URL}/reports/latest`),
+        axios.get<ModelInfo>(`${API_URL}/model/info`)
       ]);
 
       if (statsRes.status === 'fulfilled') {
@@ -75,6 +88,9 @@ export default function Monitoring() {
         setLatestReport(null);
       }
 
+      if (modelRes.status === 'fulfilled') {
+        setModelInfo(modelRes.value.data);
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Unable to fetch monitoring data.');
     } finally {
@@ -89,7 +105,6 @@ export default function Monitoring() {
       setDriftResult(res.data);
     } catch (err: any) {
       console.error('Drift check failed:', err);
-      // Fail gracefully as per requirements
     } finally {
       setIsCheckingDrift(false);
     }
@@ -100,7 +115,9 @@ export default function Monitoring() {
   }, []);
 
   const handleViewReport = () => {
-    if (latestReport) {
+    if (driftResult?.report_link) {
+      window.open(`${API_URL}${driftResult.report_link}`, '_blank');
+    } else if (latestReport) {
       window.open(`${API_URL}/reports/${latestReport}`, '_blank');
     }
   };
@@ -217,25 +234,68 @@ export default function Monitoring() {
                    driftStatus?.status?.toUpperCase() || 'CHECKING'}
                 </Badge>
               </div >
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Summary</p>
-                <p className="text-sm text-slate-700">
-                  {driftResult ? driftResult.message : (driftStatus?.detail || 'Checking monitoring pipeline...')}
-                </p>
-                {driftResult && driftResult.drifted_column_count > 0 && (
-                  <p className="text-xs text-slate-500">
-                    {driftResult.drifted_column_count} drifted columns ({ (driftResult.actual_drift_share * 100).toFixed(1) }%)
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Summary</p>
+                  <p className="text-sm text-slate-700">
+                    {driftResult ? driftResult.message : (driftStatus?.detail || 'Checking monitoring pipeline...')}
                   </p>
+                  {driftResult && (
+                    <div className="mt-2 space-y-1 text-xs text-slate-500">
+                      <div className="flex justify-between">
+                        <span>Drifted Columns:</span>
+                        <span className={driftResult.drift_detected ? 'font-bold text-red-600' : 'font-bold text-emerald-600'}>
+                          {driftResult.drifted_column_count}
+                        </span>
+                      </div >
+                      <div className="flex justify-between">
+                        <span>Share:</span>
+                        <span>{(driftResult.actual_drift_share * 100).toFixed(1)}% (Threshold: {(driftResult.drift_share_threshold * 100).toFixed(1)}%)</span>
+                      </div >
+                      <div className="flex justify-between">
+                        <span>Analyzed:</span>
+                        <span>{driftResult.current_rows} requests</span>
+                      </div >
+                      {driftResult.last_checked && (
+                        <div className="flex justify-between">
+                          <span>Last Checked:</span>
+                          <span>{driftResult.last_checked}</span>
+                        </div >
+                      )}
+                    </div >
+                  )}
+                </div >
+
+                {driftResult && driftResult.per_column_drift_scores && Object.keys(driftResult.per_column_drift_scores).length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Column Drift Scores</p>
+                    <div className="max-h-32 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-2 text-[10px]">
+                      {Object.entries(driftResult.per_column_drift_scores).map(([col, score]) => (
+                        <div key={col} className="flex items-center justify-between py-0.5">
+                          <span className="truncate max-w-[100px]">{col}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="h-1 w-12 rounded-full bg-slate-200">
+                              <div 
+                                className={cn("h-full rounded-full", score > (driftResult.drift_share_threshold ?? 0) ? "bg-red-500" : "bg-emerald-500")}
+                                style={{ width: `${Math.min(score * 100, 100)}%` }}
+                              />
+                            </div>
+                            <span className="font-mono w-8 text-right">{score.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div >
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 pt-2">
                 <Button 
                   variant="outline" 
                   className="w-full text-xs"
                   onClick={handleViewReport}
-                  disabled={!latestReport || isCheckingDrift}
+                  disabled={!driftResult?.report_link || isCheckingDrift}
                 >
-                  {latestReport ? 'View drift report' : 'No report available'}
+                  {driftResult?.report_link ? 'View drift report' : 'No report available'}
                 </Button>
                 <Button 
                   variant="secondary" 
@@ -266,12 +326,12 @@ export default function Monitoring() {
                   <Database size={22} />
                 </div >
                 <div>
-                  <p className="text-sm font-bold text-slate-900">Champion v0.1.0</p>
-                  <p className="text-xs text-slate-500">Logistic regression</p>
+                  <p className="text-sm font-bold text-slate-900">{modelInfo ? `Champion v${modelInfo.version}` : 'Champion v0.1.0'}</p>
+                  <p className="text-xs text-slate-500">{modelInfo ? modelInfo.model_type : 'Logistic regression'}</p>
                 </div >
               </div >
-
               <div className="pt-2">
+
                 <div className="mb-1.5 flex items-center justify-between text-xs">
                   <span className="font-medium text-slate-500">Model health</span >
                   <span className="font-bold text-emerald-600">98.2% stable</span >

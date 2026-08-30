@@ -1,8 +1,8 @@
 {
-    "model_type": "LogisticRegression",
+    "model_type": "XGBClassifier",
     "version": "0.1.0",
-    "trained_at": "2026-08-23 12:29:41",
-    "mlflow_run_id": "4e4f4b7f937d42c8aca7859bcdbefe97",
-    "roc_auc": 0.8543878070240329,
-    "average_precision": 0.3851099414232329
+    "trained_at": "2026-08-30 19:57:08",
+    "mlflow_run_id": "7b29d88a50a448019522d0569912f33f",
+    "roc_auc": 0.8629924411894059,
+    "average_precision": 0.40235832577576747
 }

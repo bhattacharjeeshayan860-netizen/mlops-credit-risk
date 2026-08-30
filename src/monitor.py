@@ -112,7 +112,10 @@ def run_drift_check() -> dict[str, Any]:
             "drift_share_threshold": 0.0,
             "reference_rows": 0,
             "current_rows": 0,
-            "message": "Reference data is empty. Drift detection cannot be performed."
+            "message": "Reference data is empty. Drift detection cannot be performed.",
+            "last_checked": current_time,
+            "per_column_drift_scores": {},
+            "report_link": ""
         }
         
     recent_data_csv = load_prediction_log()
@@ -136,7 +139,10 @@ def run_drift_check() -> dict[str, Any]:
             "drift_share_threshold": 0.0,
             "reference_rows": len(reference_data_CSV),
             "current_rows": len(recent_data_csv),
-            "message": "Not enough recent data for drift detection. At least 100 rows are required."
+            "message": "Not enough recent data for drift detection. At least 100 rows are required.",
+            "last_checked": current_time,
+            "per_column_drift_scores": {},
+            "report_link": ""
         }
 
     monitoring_columns = NUMERIC_COLUMNS + CATEGORICAL_COLUMNS
@@ -153,7 +159,10 @@ def run_drift_check() -> dict[str, Any]:
             "drift_share_threshold": 0.0,
             "reference_rows": len(reference_data_CSV),
             "current_rows": len(recent_data_csv),
-            "message": "No common columns found for drift detection."
+            "message": "No common columns found for drift detection.",
+            "last_checked": current_time,
+            "per_column_drift_scores": {},
+            "report_link": ""
         }
 
     data_definition = DataDefinition(
@@ -185,8 +194,20 @@ def run_drift_check() -> dict[str, Any]:
         drift_detected = True
         
     REPORTS_DIR.mkdir(exist_ok=True)
-    snapshot.save_html(str(REPORTS_DIR / f"drift_report_{current_time}_{drift_detected}.html"))
+    report_filename = f"drift_report_{current_time}_{drift_detected}.html"
+    report_path = REPORTS_DIR / report_filename
+    snapshot.save_html(str(report_path))
     
+    # Extract per-column drift scores
+    per_column_drift_scores = {}
+    for metric in data.get('metrics', []):
+        # Evidently metrics often have 'column' in their config if they are column-specific
+        column = metric.get('config', {}).get('column')
+        if column:
+            # We want a drift score. Note that different metrics might provide different values.
+            # For column drift, we look for a 'value' that represents the score.
+            per_column_drift_scores[column] = float(metric.get('value', 0.0))
+
     return {
         "drift_detected": drift_detected,
         "drifted_columns": drifted_columns,
@@ -195,5 +216,8 @@ def run_drift_check() -> dict[str, Any]:
         "drift_share_threshold": drift_share_threshold,
         "reference_rows": len(reference_data_CSV),
         "current_rows": len(recent_data_csv),
-        "message": "Drift detection completed."
+        "message": "Drift detection completed.",
+        "last_checked": current_time,
+        "per_column_drift_scores": per_column_drift_scores,
+        "report_link": f"/reports/{report_filename}"
     }
