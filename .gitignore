@@ -25,6 +25,8 @@ grafana-data/*
 mlruns/
 mlartifacts/
 mlflow/
+mlflow-artifacts/
+reports/*.html
 
 # Notebooks
 .ipynb_checkpoints/

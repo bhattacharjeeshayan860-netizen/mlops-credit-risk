@@ -186,6 +186,10 @@ def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.Data
 
 def tune_xgb(X_train: pd.DataFrame, y_train: pd.Series) -> xgb.XGBClassifier:
     """Perform randomized search to find optimal XGBoost hyperparameters."""
+    def score_roc_auc(model, X: pd.DataFrame, y: pd.Series) -> float:
+        y_probability = model.predict_proba(X)[:, 1]
+        return float(roc_auc_score(y, y_probability))
+
     param_dist = {
         'n_estimators': [50, 100, 200],
         'max_depth': [3, 5, 7],
@@ -193,12 +197,12 @@ def tune_xgb(X_train: pd.DataFrame, y_train: pd.Series) -> xgb.XGBClassifier:
         'subsample': [0.8, 1.0],
         'colsample_bytree': [0.8, 1.0],
     }
-    xgb_clf = xgb.XGBClassifier(random_state=RANDOM_STATE, use_label_encoder=False, eval_metric='logloss')
+    xgb_clf = xgb.XGBClassifier(random_state=RANDOM_STATE, eval_metric='logloss')
     search = RandomizedSearchCV(
         xgb_clf, 
         param_distributions=param_dist, 
         n_iter=5, 
-        scoring='roc_auc', 
+        scoring=score_roc_auc,
         cv=3, 
         random_state=RANDOM_STATE, 
         n_jobs=-1
@@ -264,7 +268,6 @@ def train_candidate(persist_local_artifacts: bool = True) -> dict[str, str]:
             sk_model=model,
             artifact_path=MLFLOW_ARTIFACT_PATH,
             registered_model_name=MLFLOW_EXPERIMENT_NAME,
-            skops_trusted_types=['xgboost.core.Booster', 'xgboost.sklearn.XGBClassifier']
         )
         
         mlflow.log_metrics({
