@@ -39,6 +39,7 @@ FASTAPI_PORT = os.getenv("FASTAPI_PORT", "8000")
 MLFLOW_PORT = os.getenv("MLFLOW_PORT", "5000")
 PROMETHEUS_PORT = os.getenv("PROMETHEUS_PORT", "9090")
 GRAFANA_PORT = os.getenv("GRAFANA_PORT", "3000")
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+# Use local file-based tracking if no server is provided, making it easy to run locally
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
 MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "credit_risk_model")
 MLFLOW_ARTIFACT_PATH = os.getenv("MLFLOW_ARTIFACT_PATH", "model")

@@ -1,315 +1,259 @@
-"""Train the credit-risk model and save production inference artifacts.
-
-This file will own the training workflow for the Give Me Some Credit dataset:
-load data, preprocess features, train a classifier, evaluate ROC-AUC, save the
-model, save preprocessing medians, save a reference dataset, and log results to
-MLflow.
 """
-import sys
-import tempfile
-from pathlib import Path
-import json
-from datetime import datetime
-import time
+Production-ready XGBoost Training Pipeline with Champion/Challenger Workflow.
+"""
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import os
+# Set MLflow tracking URI as environment variable BEFORE importing mlflow
+os.environ["MLFLOW_TRACKING_URI"] = "sqlite:///mlflow.db"
 
-import joblib
+import logging
+import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split, RandomizedSearchCV
-
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 import mlflow
 import mlflow.sklearn
-from mlflow.tracking import MlflowClient
-from src.preprocessing import CreditRiskPreprocessor, TARGET_COLUMN
-from src.utils import ARTIFACTS_DIR, MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME, MLFLOW_ARTIFACT_PATH
-from sklearn.metrics import roc_auc_score,average_precision_score,classification_report, confusion_matrix
+from pathlib import Path
+from typing import Dict, Any, Tuple
 
-DATA_PATH = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
-RANDOM_STATE = 42
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, average_precision_score, log_loss
+from mlflow.models.signature import infer_signature
 
+from src.preprocessing import CreditRiskPreprocessor, TARGET_COLUMN, COLUMN_RENAMES
+from src.utils import (
+    FEATURE_COLUMNS,
+    ARTIFACTS_DIR,
+    MLFLOW_TRACKING_URI,
+    MLFLOW_EXPERIMENT_NAME,
+    MLFLOW_ARTIFACT_PATH,
+    PROJECT_ROOT
+)
 
-def load_data() -> pd.DataFrame:
-    """Load the raw Give Me Some Credit dataset."""
-    return pd.read_csv(DATA_PATH)
+# --- LOGGING ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-
-def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
-    """Split the dataset into train, validation, and test sets."""
-    X = df.drop(columns=[TARGET_COLUMN])
-    y = df[TARGET_COLUMN]
-
-    X_train_raw, X_temp_raw, y_train, y_temp = train_test_split(
-        X,
-        y,
-        test_size=0.3,
-        random_state=RANDOM_STATE,
-        stratify=y,
-    )
-    X_val_raw, X_test_raw, y_val, y_test = train_test_split(
-        X_temp_raw,
-        y_temp,
-        test_size=0.5,
-        random_state=RANDOM_STATE,
-        stratify=y_temp,
-    )
-    return X_train_raw, X_val_raw, X_test_raw, y_train, y_val, y_test
-
-
-def preprocess_data(X_train_raw: pd.DataFrame, X_val_raw: pd.DataFrame, X_test_raw: pd.DataFrame):
-    """Fit preprocessing on train data and transform all splits."""
-    preprocessor = CreditRiskPreprocessor(clip_quantile=0.99)
-    preprocessor.fit_transform(X_train_raw)
-    X_train = preprocessor.transform(X_train_raw)
-    X_val = preprocessor.transform(X_val_raw)
-    X_test = preprocessor.transform(X_test_raw)
-
-    return X_train, X_val, X_test, preprocessor
-
-
-def build_model(classifier=None) -> Pipeline:
-    """Create a model pipeline."""
-    if classifier is None:
-        classifier = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=RANDOM_STATE)
-    model = Pipeline(steps=[
-        ("scaler", StandardScaler()),
-        ("classifier", classifier),
-    ])
-    return model
-
-
-def build_cv_pipeline(classifier=None) -> Pipeline:
-    """Create a full preprocessing + model pipeline for cross-validation."""
-    if classifier is None:
-        classifier = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=RANDOM_STATE)
-    model = Pipeline(steps=[
-        ("preprocessor", CreditRiskPreprocessor(clip_quantile=0.99)),
-        ("scaler", StandardScaler()),
-        ("classifier", classifier),
-    ])
-    return model
-
-
-def run_cross_validation(X_train_raw: pd.DataFrame, y_train: pd.Series, classifier=None) -> dict:
-    """Run cross-validation on the training split only."""
-    if classifier is None:
-        classifier = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=RANDOM_STATE)
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
-    scores = cross_validate(
-        build_cv_pipeline(classifier),
-        X_train_raw,
-        y_train,
-        cv=cv,
-        scoring=["roc_auc", "average_precision"],
-        n_jobs=-1,
-    )
-
-    metrics = {
-        "roc_auc_mean": float(scores["test_roc_auc"].mean()),
-        "roc_auc_std": float(scores["test_roc_auc"].std()),
-        "average_precision_mean": float(scores["test_average_precision"].mean()),
-        "average_precision_std": float(scores["test_average_precision"].std()),
-    }
-
-    print("\nCROSS-VALIDATION METRICS")
-    print(f"ROC-AUC: {metrics['roc_auc_mean']:.4f} +/- {metrics['roc_auc_std']:.4f}")
-    print(f"PR-AUC:  {metrics['average_precision_mean']:.4f} +/- {metrics['average_precision_std']:.4f}")
-
-    return metrics
-
-
-def train_model(X_train: pd.DataFrame, y_train: pd.Series, classifier=None) -> Pipeline:
-    """Train a classifier on the preprocessed training data."""
-    model = build_model(classifier)
-    model.fit(X_train, y_train)
-    return model
-
-
-def evaluate_model(model, X: pd.DataFrame, y: pd.Series, split_name: str) -> dict:
-    """Evaluate a classifier and return JSON-serializable metrics."""
-    y_prob = model.predict_proba(X)[:, 1]
-    y_pred = model.predict(X)
-    roc_auc = float(roc_auc_score(y, y_prob))
-    average_precision = float(average_precision_score(y, y_prob))
-
-    metrics = {
-        "split": split_name,
-        "roc_auc": roc_auc,
-        "average_precision": average_precision,
-        "classification_report": classification_report(y, y_pred, output_dict=True),
-        "confusion_matrix": confusion_matrix(y, y_pred).tolist(),
-    }
-
-    print(f"\n{split_name.upper()} METRICS")
-    print(f"ROC-AUC: {roc_auc:.4f}")
-    print(f"PR-AUC:  {average_precision:.4f}")
-    print(classification_report(y, y_pred))
-
-    return metrics
-
-
-def save_artifacts(model, preprocessor: CreditRiskPreprocessor, X_train: pd.DataFrame,run_id: str, metrics: dict, output_dir: Path = ARTIFACTS_DIR) -> None:
-    """Save model, preprocessor, reference data, and metrics."""
-    output_dir.mkdir(exist_ok=True)
-
-    joblib.dump(model, output_dir / "model.pkl")
-    joblib.dump(preprocessor, output_dir / "preprocessor.pkl")
-    X_train.to_csv(output_dir / "reference.csv", index=False)
-
-    with open(output_dir / "metrics.json", "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=4)
-
-    with open(output_dir / "preprocessing_artifact.json", "w", encoding="utf-8") as f:
-        json.dump(preprocessor.get_artifact().to_dict(), f, indent=4)
-    with open(output_dir / "model_info.json", "w", encoding="utf-8") as f:
-        json.dump({
-            "model_type": model.named_steps["classifier"].__class__.__name__,
-            "version": "0.1.0",
-            "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "mlflow_run_id": run_id,
-            "roc_auc": metrics["test"]["roc_auc"],
-            "average_precision": metrics["test"]["average_precision"],
-        },f, indent=4)
-
-    mlflow.log_artifact(str(output_dir / "preprocessor.pkl"), artifact_path="preprocessor")
-    mlflow.log_artifact(str(output_dir / "reference.csv"), artifact_path="reference")
-    mlflow.log_artifact(str(output_dir / "preprocessing_artifact.json"), artifact_path="preprocessor")
-    mlflow.log_artifact(str(output_dir / "model_info.json"), artifact_path="model_info")
-    
-
-
-def tune_xgb(X_train: pd.DataFrame, y_train: pd.Series) -> xgb.XGBClassifier:
-    """Perform randomized search to find optimal XGBoost hyperparameters."""
-    def score_roc_auc(model, X: pd.DataFrame, y: pd.Series) -> float:
-        y_probability = model.predict_proba(X)[:, 1]
-        return float(roc_auc_score(y, y_probability))
-
-    param_dist = {
-        'n_estimators': [50, 100, 200],
-        'max_depth': [3, 5, 7],
-        'learning_rate': [0.01, 0.1, 0.2],
-        'subsample': [0.8, 1.0],
-        'colsample_bytree': [0.8, 1.0],
-    }
-    xgb_clf = xgb.XGBClassifier(random_state=RANDOM_STATE, eval_metric='logloss')
-    search = RandomizedSearchCV(
-        xgb_clf, 
-        param_distributions=param_dist, 
-        n_iter=5, 
-        scoring=score_roc_auc,
-        cv=3, 
-        random_state=RANDOM_STATE, 
-        n_jobs=-1
-    )
-    search.fit(X_train, y_train)
-    return search.best_estimator_
-
-
-def train_candidate(persist_local_artifacts: bool = True) -> dict[str, str]:
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
-
-    with mlflow.start_run() as active_run:
-        df = load_data()
-        mlflow.set_tag("dataset", "Give Me Some Credit")
-        X_train_raw, X_val_raw, X_test_raw, y_train, y_val, y_test = split_data(df)
+class XGBoostProductionTrainer:
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.model_name = config["MODEL_NAME"]
+        self.target = config["TARGET"]
+        self.features = config["FEATURES"]
+        self.primary_metric = config["PRIMARY_METRIC"]
+        self.threshold = config["DELTA_THRESHOLD"]
         
-        # 1. Cross-validation (Baseline)
-        cv_metrics = run_cross_validation(X_train_raw, y_train, classifier=LogisticRegression(class_weight="balanced", max_iter=1000, random_state=RANDOM_STATE))
-        mlflow.log_metrics({f"cv_{k}": v for k, v in cv_metrics.items()})
+        mlflow.set_tracking_uri(config.get("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"))
+        mlflow.set_experiment(config["EXPERIMENT_NAME"])
+        self.client = mlflow.tracking.MlflowClient()
 
-        X_train, X_val, X_test, preprocessor = preprocess_data(X_train_raw, X_val_raw, X_test_raw)
+    def _audit_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        logger.info("🔍 Running Data Audit...")
+        if df[self.target].isnull().any():
+            raise ValueError(f"CRITICAL: Target '{self.target}' contains NaNs.")
         
-        # 2. Train Baseline (LR)
-        lr_classifier = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=RANDOM_STATE)
-        lr_model = train_model(X_train, y_train, classifier=lr_classifier)
-        
-        # 3. Train Tuned Candidate (XGBoost)
-        print("Tuning XGBoost candidate...")
-        tuned_xgb_clf = tune_xgb(X_train, y_train)
-        xgb_model = train_model(X_train, y_train, classifier=tuned_xgb_clf)
+        missing = df[self.features].isnull().sum()
+        if missing.any():
+            logger.warning(f"Missing values detected:\n{missing[missing > 0]}")
 
-        # 4. Evaluate both on validation set
-        lr_val_metrics = evaluate_model(lr_model, X_val, y_val, split_name="val_lr")
-        xgb_val_metrics = evaluate_model(xgb_model, X_val, y_val, split_name="val_xgb")
+        if df.duplicated().any():
+            logger.info("Deduplicating data...")
+            df = df.drop_duplicates()
 
-        # 5. Model Selection
-        if xgb_val_metrics["roc_auc"] > lr_val_metrics["roc_auc"]:
-            model = xgb_model
-            val_metrics = xgb_val_metrics
-            selected_type = "XGBoost"
-            print(f"XGBoost won: {xgb_val_metrics['roc_auc']:.4f} > {lr_val_metrics['roc_auc']:.4f}")
-        else:
-            model = lr_model
-            val_metrics = lr_val_metrics
-            selected_type = "LogisticRegression"
-            print(f"LogisticRegression won: {lr_val_metrics['roc_auc']:.4f} >= {xgb_val_metrics['roc_auc']:.4f}")
+        corrs = df[self.features].corrwith(df[self.target])
+        leaky = corrs[corrs > 0.98].index.tolist()
+        if leaky:
+            raise ValueError(f"CRITICAL: Feature leakage in: {leaky}")
 
-        # 6. Evaluate winner on test set
-        test_metrics = evaluate_model(model, X_test, y_test, split_name="test")
+        logger.info("✅ Audit Complete.")
+        return df
 
-        # 7. Logging
-        start = time.perf_counter()
-        # Re-fit the winner to get an accurate training time for logging
-        model.fit(X_train, y_train)
-        train_time = time.perf_counter() - start
-
-        mlflow.log_param("model_type", selected_type)
-        mlflow.log_params(model.named_steps["classifier"].get_params())
-        mlflow.log_param("train_time", train_time)
-
-        mlflow.sklearn.log_model(
-            sk_model=model,
-            artifact_path=MLFLOW_ARTIFACT_PATH,
-            registered_model_name=MLFLOW_EXPERIMENT_NAME,
+    def _split_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
+        X = df[self.features]
+        y = df[self.target]
+        X_train_raw, X_temp, y_train, y_temp = train_test_split(
+            X, y, test_size=0.3, stratify=y, random_state=42
         )
+        X_val_raw, X_test, y_val, y_test = train_test_split(
+            X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42
+        )
+        return X_train_raw, X_val_raw, X_test, y_train, y_val, y_test
+
+    def _get_cv_stability(self, X: pd.DataFrame, y: pd.Series, params: Dict) -> Tuple[float, float]:
+        from sklearn.model_selection import StratifiedKFold, cross_val_score
+        logger.info("⚖️ Validating model stability via 5-Fold CV...")
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         
-        mlflow.log_metrics({
-            "val_roc_auc": val_metrics["roc_auc"],
-            "val_average_precision": val_metrics["average_precision"],
-            "test_roc_auc": test_metrics["roc_auc"],
-            "test_average_precision": test_metrics["average_precision"],
-        })
+        # Clean params to avoid multiple values for keyword arguments
+        cv_params = params.copy()
+        for key in ["enable_categorical", "tree_method"]:
+            cv_params.pop(key, None)
+            
+        scores = cross_val_score(
+            xgb.XGBClassifier(**cv_params, enable_categorical=True, tree_method='hist'), 
+            X, y, cv=skf, scoring='roc_auc'
+        )
+        return np.mean(scores), np.std(scores)
+
+
+    def train_and_compare(self, df: pd.DataFrame):
+        # 1. Rename columns immediately to match FEATURE_COLUMNS
+        logger.info("🔄 Renaming columns to match feature schema...")
+        df = df.rename(columns=COLUMN_RENAMES)
+
+        # 2. Audit
+        df = self._audit_data(df)
         
-        run_id = active_run.info.run_id
-        if persist_local_artifacts:
-            save_artifacts(model, preprocessor, X_train, run_id,
-                           {"cross_validation": cv_metrics,
-                            "validation": val_metrics,
-                            "test": test_metrics
-                           })
+        # 3. Split
+        X_train_raw, X_val_raw, X_test, y_train, y_val, y_test = self._split_data(df)
+
+        # 4. Preprocessing
+        logger.info("⚙️ Fitting Preprocessor...")
+        preprocessor = CreditRiskPreprocessor(clip_quantile=0.99)
+        preprocessor.fit(X_train_raw)
+        
+        X_train = preprocessor.transform(X_train_raw)
+        X_val = preprocessor.transform(X_val_raw)
+        X_test = preprocessor.transform(X_test)
+
+        # 5. Imbalance weight
+        ratio = float((y_train == 0).sum() / (y_train == 1).sum())
+
+        params = {
+            "objective": "binary:logistic",
+            "eval_metric": self.primary_metric,
+            "scale_pos_weight": ratio,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "enable_categorical": True,
+            "tree_method": "hist",
+            "random_state": 42
+        }
+
+        with mlflow.start_run(run_name="XGBoost_Challenger") as run:
+            logger.info(f"🚀 Training Challenger (Run: {run.info.run_id})...")
+            cv_mean, cv_std = self._get_cv_stability(X_train, y_train, params)
+            
+            model = xgb.XGBClassifier(**params)
+            model.fit(
+                X_train, y_train,
+                eval_set=[(X_val, y_val)],
+                verbose=False
+            )
+
+            probs = model.predict_proba(X_test)[:, 1]
+            metrics = {
+                self.primary_metric: roc_auc_score(y_test, probs) if self.primary_metric == "auc" else average_precision_score(y_test, probs),
+                "logloss": log_loss(y_test, probs),
+                "cv_mean": cv_mean,
+                "cv_std": cv_std
+            }
+
+            mlflow.log_params(params)
+            mlflow.log_metrics(metrics)
+            mlflow.log_param("imbalance_ratio", ratio)
+            mlflow.log_param("cv_std", cv_std)
+            
+            signature = infer_signature(X_test, probs)
+            mlflow.sklearn.log_model(
+                sk_model=model,
+                artifact_path=MLFLOW_ARTIFACT_PATH,
+                signature=signature,
+                skops_trusted_types=['xgboost.core.Booster', 'xgboost.sklearn.XGBClassifier']
+            )
+            
+            import joblib
+            preprocessor_path = Path("temp_preprocessor.pkl")
+            joblib.dump(preprocessor, preprocessor_path)
+            mlflow.log_artifact(str(preprocessor_path), "preprocessor")
+            os.remove(preprocessor_path)
+
+            logger.info(f"✅ Challenger Evaluation: {metrics}")
+            self._decide_promotion(run.info.run_id, metrics)
+            return run.info.run_id, metrics
+
+    def _decide_promotion(self, run_id: str, metrics: Dict):
+        try:
+            versions = self.client.get_latest_versions(self.model_name, stages=["Production"])
+            if not versions:
+                logger.info("🌟 No champion. Promoting challenger as the first champion.")
+                self._promote(run_id)
+                return
+
+            champion_v = versions[0]
+            champ_run = self.client.get_run(champion_v.run_id)
+            champ_auc = champ_run.data.metrics[self.primary_metric]
+            
+            improvement = metrics[self.primary_metric] - champ_auc
+            stability_pass = (metrics["cv_std"] / metrics[self.primary_metric]) < 0.02
+
+            logger.info(f"🏆 Champion {champion_v.version} AUC: {champ_auc:.4f}")
+            logger.info(f"📈 Challenger AUC: {metrics[self.primary_metric]:.4f} (Imp: {improvement:.4f})")
+
+            if improvement >= self.threshold and stability_pass:
+                logger.info("🚀 PROMOTION: Challenger beats champion and is stable.")
+                self._promote(run_id)
+            else:
+                reason = "Low improvement" if improvement < self.threshold else "Unstable (high CV variance)"
+                logger.info(f"❌ REJECTED: {reason}")
+        except Exception as e:
+            logger.error(f"Promotion logic error: {e}")
+
+    def _promote(self, run_id: str):
+        versions = self.client.search_model_versions(f"name='{self.model_name}'")
+        target_v = next((v.version for v in versions if v.run_id == run_id), None)
+        if target_v:
+            self.client.transition_model_version_stage(
+                name=self.model_name,
+                version=int(target_v),
+                stage="Production",
+                archive_existing_versions=True
+            )
+            logger.info(f"✨ Model v{target_v} is now PROD CHAMPION.")
         else:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                save_artifacts(model, preprocessor, X_train, run_id,
-                                {"cross_validation": cv_metrics,
-                                 "validation": val_metrics,
-                                 "test": test_metrics
-                                }, output_dir=Path(temp_dir))
+            logger.error("Could not resolve model version for promotion.")
 
-    client = MlflowClient()
-    versions = client.search_model_versions(
-        f"name='{MLFLOW_EXPERIMENT_NAME}'"
+def train_candidate(persist_local_artifacts: bool = True) -> Dict[str, str]:
+    """Shim for bootstrap.py"""
+    from src.preprocessing import TARGET_COLUMN
+    from src.utils import (
+        FEATURE_COLUMNS,
+        MLFLOW_TRACKING_URI,
+        MLFLOW_EXPERIMENT_NAME
     )
-    candidate_versions = [version for version in versions if version.run_id == run_id]
-    if not candidate_versions:
-        raise RuntimeError("The trained model was not registered in MLflow.")
-
-    candidate_version = max(candidate_versions, key=lambda version: int(version.version))
-    return {
-        "run_id": run_id,
-        "version": str(candidate_version.version),
+    config = {
+        "MODEL_NAME": "credit_risk_xgb",
+        "EXPERIMENT_NAME": MLFLOW_EXPERIMENT_NAME,
+        "TARGET": TARGET_COLUMN,
+        "FEATURES": FEATURE_COLUMNS,
+        "PRIMARY_METRIC": "auc",
+        "DELTA_THRESHOLD": 0.005,
+        "MLFLOW_TRACKING_URI": "sqlite:///mlflow.db"
     }
+    data_path = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
+    if not data_path.exists():
+        raise FileNotFoundError(f"Data not found at {data_path}")
+    df = pd.read_csv(data_path)
+    trainer = XGBoostProductionTrainer(config)
+    run_id, metrics = trainer.train_and_compare(df)
+    return {"run_id": run_id, "version": "latest"}
 
+def main():
+    config = {
+        "MODEL_NAME": "credit_risk_xgb",
+        "EXPERIMENT_NAME": MLFLOW_EXPERIMENT_NAME,
+        "TARGET": TARGET_COLUMN,
+        "FEATURES": FEATURE_COLUMNS,
+        "PRIMARY_METRIC": "auc",
+        "DELTA_THRESHOLD": 0.005,
+        "MLFLOW_TRACKING_URI": MLFLOW_TRACKING_URI
+    }
+    data_path = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
+    if not data_path.exists():
+        logger.error(f"Data not found at {data_path}")
+        return
+    df = pd.read_csv(data_path)
+    trainer = XGBoostProductionTrainer(config)
+    trainer.train_and_compare(df)
 
-def main() -> None:
-    """Run the full training pipeline."""
-    train_candidate()
 if __name__ == "__main__":
     main()
-
