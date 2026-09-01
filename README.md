@@ -1,4 +1,4 @@
-# 🛡️End-to-End MLOps for Credit Risk Prediction
+# 🛡️ mloops: End-to-End MLOps for Credit Risk Prediction
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
@@ -8,9 +8,9 @@
 
 ## 🌐 Live Demo
 
-[Click here to view the deployed application](https://mlops-credit-risk-frontend.onrender.com/)
+[Open the deployed credit risk application](https://mlops-credit-risk-frontend.onrender.com/)
 
-A production-ready, automated MLOps system for credit risk modeling. This project demonstrates the complete machine learning lifecycle, from data ingestion and feature engineering to automated training, model registry, real-time API serving, and continuous observability.
+A production-style MLOps system for credit risk prediction built around a deployed XGBoost champion model. The project demonstrates a complete machine learning lifecycle, from raw data ingestion and preprocessing to automated training, model registry governance, API serving, and deployment monitoring in a production-ready architecture.
 
 ## 🎯 Business Value
 
@@ -83,8 +83,8 @@ mlops-credit-risk/
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd mloops
+git clone https://github.com/bhattacharjeeshayan860-netizen/mlops-credit-risk.git
+cd mlops-credit-risk
 
 # Create and activate a virtual environment
 python -m venv venv
@@ -116,14 +116,14 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 ## 🔄 Model Lifecycle & Deployment Workflow
 
-1.  **Experimentation**: Data scientists use `notebooks/` to explore data and validate assumptions.
-2.  **Automated Training**: Running `src/train.py` triggers the automated pipeline:
-    *   **Preprocessing**: Cleaning and feature engineering via `src/preprocessing.py`.
-    *   **Tuning**: Hyperparameter optimization for XGBoost using `RandomizedSearchCV`.
-    *   **Evaluation**: Comparing candidates (e.g., Logistic Regression vs. XGBoost) against a validation set.
-    *   **Registry**: The winner is logged to MLflow and registered as a new model version.
-3.  **Deployment**: The `fastapi-app` service pulls the latest registered model and its corresponding preprocessing artifacts from MLflow.
-4.  **Monitoring**: Real-time prediction metrics are scraped by Prometheus, while `src/monitor.py` uses Evidently AI to detect data drift and generate reports.
+1. **Experimentation**: Data scientists use the `notebooks/` workspace to explore the credit dataset and validate assumptions before productionizing the pipeline.
+2. **Automated Training**: Running `src/train.py` triggers the production-grade training workflow:
+    * **Preprocessing**: Cleaning and feature engineering through `src/preprocessing.py`.
+    * **Modeling**: XGBoost training with class imbalance handling and validation-aware tuning.
+    * **Evaluation**: Candidate models are compared against the current champion using validation metrics and stability checks.
+    * **Registry**: Winning models are logged to MLflow and promoted through a champion/challenger lifecycle.
+3. **Deployment**: The deployed API loads the active champion model and preprocessing artifacts, serving real-time predictions through a containerized FastAPI service.
+4. **Monitoring**: Prediction metrics are captured via Prometheus, while drift and model health checks are generated to support operational observability and retraining decisions.
 
 ## 🔌 API Reference
 
