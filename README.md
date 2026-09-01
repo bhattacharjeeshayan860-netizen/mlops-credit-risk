@@ -1,140 +1,143 @@
-# mloops: End-to-End MLOps Pipeline for Credit Risk Modeling
+# 🛡️ mloops: End-to-End MLOps for Credit Risk Prediction
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
 [![MLflow](https://img.shields.io/badge/MLflow-Tracking-blue)](https://mlflow.org/)
 [![Docker](https://img.shields.io/badge/docker-compose-blue?logo=docker)](https://docs.docker.com/compose/)
+[![Pytest](https://img.shields.io/badge/pytest-%230071FF.svg?style=flat&logo=pytest&logoColor=white)](https://docs.pytest.org/)
 
-`mloops` is a production-oriented MLOps framework designed to manage the complete lifecycle of a credit-risk prediction model. It bridges the gap between experimental machine learning and reliable real-time serving by integrating experiment tracking, stateful preprocessing, automated observability, and containerized deployment.
+## 🌐 Live Demo
 
----
+[Click here to view the deployed application](https://mlops-credit-risk-frontend.onrender.com/)
 
-## 🏗 Architecture
+A production-ready, automated MLOps system for credit risk modeling. This project demonstrates the complete machine learning lifecycle, from data ingestion and feature engineering to automated training, model registry, real-time API serving, and continuous observability.
 
-The system is composed of a modular stack designed for scalability and observability:
+## 🎯 Business Value
+
+Predicting credit risk allows financial institutions to minimize defaults and optimize lending decisions. This system ensures that models are not just accurate in research, but reliable, scalable, and monitorable in production environments.
+
+## 🏗️ System Architecture
 
 ```mermaid
 graph TD
-    subgraph "Training & Registry"
-        A[Raw Data] --> B[Training Pipeline]
-        B --> C{MLflow Server}
-        C -->|Store| D[Model Registry]
-        C -->|Store| E[Experiment Metrics]
+    subgraph "Data & Training"
+        A[Raw Data: cs-training.csv] --> B[Preprocessing & Feature Engineering]
+        B --> C[Hyperparameter Tuning & Training]
+        C --> D[Model Validation & Selection]
+        D --> E[MLflow: Tracking & Registry]
     end
 
-    subgraph "Inference Service"
-        D --> F[FastAPI Service]
+    subgraph "Deployment & Serving"
+        E -->|Fetch Best Model| F[FastAPI Inference Service]
         F -->|Load| G[Preprocessing Artifacts]
-        H[Live Requests] --> F
-        F -->|Return| I[Risk Score]
+        H[User/App Requests] --> F
+        F -->|Response| I[Credit Risk Score]
     end
 
-    subgraph "Observability Stack"
-        F -->|Expose| J[Prometheus Metrics]
-        J -->|Scrape| K[Prometheus Server]
-        K -->|Visualize| L[Grafana Dashboards]
-        F -->|Log Data| M[Prediction Log]
-        M -->|Drift Detection| N[Evidently AI]
-        N -->|Report| O[Drift Reports]
+    subgraph "Monitoring & Observability"
+        F -->|Metrics| J[Prometheus]
+        J -->|Visualization| K[Grafana Dashboards]
+        F -->|Prediction Logs| L[Drift Detection: Evidently AI]
+        L -->|Alerts/Reports| M[Monitoring Dashboard]
     end
 ```
 
-### Current Status
+## 🛠️ Tech Stack
 
-| Feature | Status |
+| Category | Tools |
 | :--- | :--- |
-| **ML Training Pipeline** | ✅ Implemented |
-| **MLflow Tracking & Registry** | ✅ Implemented |
-| **FastAPI Inference API** | ✅ Implemented |
-| **Prometheus Metrics Integration** | ✅ Implemented |
-| **Grafana Dashboard Support** | ✅ Implemented |
-| **Evidently Drift Detection** | ✅ Implemented |
-| **Dockerized Stack** | ✅ Implemented |
-| **Frontend Dashboard** | ✅ Implemented |
-| **Automated Retraining Loop** | ✅ Implemented |
-| **Authentication & HTTPS** | ⏳ Planned |
+| **Core Language** | Python 3.9+ |
+| **Machine Learning** | XGBoost, Scikit-learn, Pandas, NumPy |
+| **MLOps & Tracking** | MLflow |
+| **Model Serving** | FastAPI, Uvicorn |
+| **Containerization** | Docker, Docker Compose |
+| **Observability** | Prometheus, Grafana, Evidently AI |
+| **Testing** | Pytest, HTTPX |
+| **CI/CD** | GitHub Actions |
 
----
+## 📁 Project Structure
 
-## 🛠 Setup & Installation
+```text
+mlops-credit-risk/
+├── api/                # FastAPI inference service
+├── artifacts/          # Locally stored model and preprocessing artifacts
+├── data/                # Raw and processed datasets
+├── docker/             # Docker configurations and orchestration
+├── mlflow/             # MLflow tracking database and metadata
+├── notebooks/          # Jupyter notebooks for EDA and experiments
+├── scripts/            # Automation and bootstrap scripts
+├── src/                # Core ML logic (preprocessing, training, monitoring)
+├── tests/              # Automated unit and integration tests
+├── requirements.txt   # Project dependencies
+└── docker-compose.yml  # Full-stack deployment orchestration
+```
 
-### Prerequisites
-- **Windows**: PowerShell 5.1+
-- **Linux/macOS**: Bash
-- **Docker & Docker Compose** installed and running
+## 🚀 Getting Started
 
-### Local Development
+### 1. Prerequisites
+- Python 3.9+
+- Docker & Docker Compose
+- Git
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd mloops
-   ```
+### 2. Local Development Setup
 
-2. **Set up a virtual environment**
-   ```bash
-   # Windows
-   python -m venv venv
-   .\venv\Scripts\activate
+```bash
+# Clone the repository
+git clone <repository-url>
+cd mloops
 
-   # Linux/macOS
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
+# Create and activate a virtual environment
+python -m venv venv
+# On Windows:
+.\venv\Scripts\activate
+# On Linux/macOS:
+source venv/bin/activate
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-4. **Bootstrap the environment (First time only)**
-   Ensure your `.env` is created and MLflow is running, then run:
-   ```bash
-   python scripts/bootstrap.py
-   ```
-   *This will train a baseline model and register it in MLflow.*
+# Set up environment variables
+cp .env.example .env
+# (Optional: Edit .env to customize ports and MLflow URI)
 
-5. **Start the Inference API**
-   ```bash
-   uvicorn api.main:app --reload
-   ```
+# Bootstrap: Run initial training and register the model
+python scripts/bootstrap.py
 
-6. **Run Tests**
-   ```bash
-   pytest
-   ```
+# Start the API locally
+uvicorn api.main:app --reload
+```
 
-### Docker Compose (Full Stack)
+### 3. Full Stack Deployment (Docker)
+To launch the entire ecosystem (API, MLflow, Prometheus, Grafana, Frontend) in one command:
 
-Launch the entire MLOps stack (including Bootstrap, API, Frontend, MLflow, Prometheus, and Grafana) with one command:
 ```bash
 docker compose -f docker/docker-compose.yml up -d --build
 ```
-*The `bootstrap` service will automatically run first to ensure a model is available.*
 
----
+## 🔄 Model Lifecycle & Deployment Workflow
+
+1.  **Experimentation**: Data scientists use `notebooks/` to explore data and validate assumptions.
+2.  **Automated Training**: Running `src/train.py` triggers the automated pipeline:
+    *   **Preprocessing**: Cleaning and feature engineering via `src/preprocessing.py`.
+    *   **Tuning**: Hyperparameter optimization for XGBoost using `RandomizedSearchCV`.
+    *   **Evaluation**: Comparing candidates (e.g., Logistic Regression vs. XGBoost) against a validation set.
+    *   **Registry**: The winner is logged to MLflow and registered as a new model version.
+3.  **Deployment**: The `fastapi-app` service pulls the latest registered model and its corresponding preprocessing artifacts from MLflow.
+4.  **Monitoring**: Real-time prediction metrics are scraped by Prometheus, while `src/monitor.py` uses Evidently AI to detect data drift and generate reports.
 
 ## 🔌 API Reference
 
-The inference service is available at `http://localhost:8000`.
+The API is accessible at `http://localhost:8000`.
 
-### Endpoints
+### Predict Credit Risk
+`POST /predict`
 
-| Method | Endpoint | Purpose |
-| :--- | :--- | :--- |
-| `GET` | `/health` | Service health check. |
-| `GET` | `/ready` | Readiness check (checks if model is loaded). |
-| `POST` | `/predict` | Returns a credit-risk prediction and probability. |
-| `GET` | `/model/info` | Returns metadata of the currently loaded model. |
-| `GET` | `/reports/latest` | Returns the filename of the latest drift report. |
-| `POST` | `/monitor` | Triggers a drift detection report. |
-| `GET` | `/metrics` | Prometheus scrape endpoint for API metrics. |
-
-### Example Request: `/predict`
-
-**Payload:**
-```json
-{
+**Example Request:**
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/predict' \
+  -H 'Content-Type: application/json' \
+  -d '{
   "RevolvingUtilizationOfUnsecuredLines": 0.32,
   "age": 45,
   "NumberOfTime30_59DaysPastDueNotWorse": 0,
@@ -145,120 +148,37 @@ The inference service is available at `http://localhost:8000`.
   "NumberRealEstateLoansOrLines": 1,
   "NumberOfTime60_89DaysPastDueNotWorse": 0,
   "NumberOfDependents": 2
+}'
+```
+
+**Example Response:**
+```json
+{
+  "prediction": 0,
+  "probability": 0.12,
+  "model_version": "1",
+  "status": "success"
 }
 ```
 
----
+## 🧪 Testing & Validation
 
-## ⚙️ Configuration
+The project maintains high code quality through automated testing:
 
-Create a `.env` file in the root directory.
+- **Unit Tests**: `pytest` covers preprocessing logic and utility functions in `src/`.
+- **Integration Tests**: `tests/test_api.py` ensures the API endpoints function correctly with real payloads.
+- **Lifecycle Tests**: `tests/test_model_lifecycle.py` validates the end-to-end flow from training to registry.
 
-**`.env.example` content:**
-```env
-# CORS Configuration (Comma-separated origins)
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-
-# API Configuration
-FASTAPI_PORT=8000
-
-# MLflow Configuration
-MLFLOW_TRACKING_URI=http://127.0.0.1:5000
-MLFLOW_EXPERIMENT_NAME=credit_risk_model
-MLFLOW_ARTIFACT_PATH=model
-MLFLOW_PORT=5000
-
-# Monitoring & Observability
-PROMETHEUS_PORT=9090
-GRAFANA_PORT=3000
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=change-me
+Run tests with:
+```bash
+pytest
 ```
 
----
-
-## 🐳 Docker Service Summary
-
-| Service | Port | Description |
-| :--- | :--- | :--- |
-| `bootstrap` | N/A | One-shot service to train/register initial model |
-| `fastapi-app` | `8000` | Real-time inference API |
-| `frontend` | `80` | Production-ready web dashboard (Nginx) |
-| `mlflow-server` | `5000` | Experiment tracking and registry |
-| `prometheus` | `9090` | Metrics scraper |
-| `grafana` | `3000` | Dashboard visualization |
-
----
-
-## 🚀 Deployment Guide (Linux VPS)
-
-To deploy this stack on a cloud instance:
-
-1. **Clone and Configure**
-   ```bash
-   git clone <repository-url>
-   cd mloops
-   cp .env.example .env
-   nano .env  # Update for production (e.g., change GRAFANA_ADMIN_PASSWORD, CORS_ORIGINS)
-   ```
-
-2. **Launch Stack**
-   ```bash
-   docker compose -f docker/docker-compose.yml up -d --build
-   ```
-
-   For a public HTTPS deployment, set `DOMAIN` to a DNS name pointing to the
-   server, set strong `API_AUTH_TOKEN` and `GRAFANA_ADMIN_PASSWORD` values, and
-   start the Caddy profile:
-   ```bash
-   docker compose --profile production -f docker/docker-compose.yml up -d --build
-   ```
-   Caddy obtains and renews the TLS certificate automatically. Open ports 80
-   and 443 in the firewall; MLflow, Prometheus, and Grafana remain bound to
-   localhost.
-
-3. **Verify Health**
-   ```bash
-   docker compose -f docker/docker-compose.yml ps
-   curl http://localhost:8000/health
-   curl http://localhost/
-   curl http://localhost:8000/ready
-   ```
-
-4. **Persistence & Storage**
-   The following storage mechanisms are in place:
-   - **MLflow database and artifacts**: Persisted through bind mounts.
-   - **Grafana data**: Persisted through a named Docker volume (`grafana-data`).
-   - **API artifacts & reports**: Persisted through bind mounts.
-
-5. **Maintenance**
-   - **View logs**: `docker compose -f docker/docker-compose.yml logs fastapi-app`
-   - **Update deployment**: `docker compose -f docker/docker-compose.yml pull && docker compose -f docker/docker-compose.yml up -d`
-
----
-
 ## 🛡️ Production Checklist
-
-- [ ] **HTTPS/TLS**: Use a reverse proxy (Nginx/Traefik) with Let's Encrypt.
-- [ ] **Authentication**: Secure `/predict` and `/monitor` endpoints via reverse proxy auth.
-- [ ] **CORS**: Restrict access to your specific frontend domain.
-- [ ] **Rate Limiting**: Prevent API abuse.
-- [ ] **Secret Management**: Use a secure vault instead of plain `.env` files.
-- [ ] **Backups**: Schedule regular backups of MLflow and API artifact bind-mounted directories.
-- [ ] **Drift Reporting**: Reports are served via `/api/reports/`. Ensure this path is secure.
+- [ ] **Security**: Implement OAuth2/JWT for API authentication.
+- [ ] **Scaling**: Deploy API on Kubernetes (EKS/GKE) for auto-scaling.
+- [ ] **CI/CD**: Enable GitHub Actions for automated testing and container image builds.
+- [ ] **Secrets**: Move `.env` secrets to AWS Secrets Manager or HashiCorp Vault.
 
 ---
-
-## ❓ Troubleshooting
-
-| Issue | Likely Cause | Solution |
-| :--- | :--- | :--- |
-| **MLflow connection failures** | `MLFLOW_TRACKING_URI` mismatch | Check `.env` and ensure `mlflow-server` is running |
-| **Missing model artifacts** | Bootstrap failed or skipped | Check `docker compose logs bootstrap` |
-| **API startup failures** | Port conflict or dependency error | Check `docker logs fastapi-app` |
-| **Docker health-check fails** | Service taking too long to start | Increase `start_period` in `docker-compose.yml` |
-| **Frontend cannot reach API** | `VITE_API_URL` or CORS mismatch | Check `.env` and Nginx configuration |
-
----
-
-**Built by Shayan Bhattacharjee**
+**Developed by Shayan Bhattacharjee**
