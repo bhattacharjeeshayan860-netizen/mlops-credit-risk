@@ -1,4 +1,4 @@
-# 🛡️ mloops: End-to-End MLOps for Credit Risk Prediction
+# 🛡️ End-to-End MLOps for Credit Risk Prediction
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
