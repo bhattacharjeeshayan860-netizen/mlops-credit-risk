@@ -147,3 +147,33 @@ def test_monitor_retrains_once_for_one_drift_event(monkeypatch):
 
     train.assert_called_once_with(persist_local_artifacts=False)
     promote.assert_called_once_with("2", "candidate-run")
+
+
+def test_train_candidate_persists_local_artifacts(monkeypatch, tmp_path):
+    trainer = Mock()
+    trainer.train_and_compare.return_value = ("candidate-run", {"auc": 0.85})
+
+    data_dir = tmp_path / "data" / "raw"
+    data_dir.mkdir(parents=True)
+    df = __import__("pandas").DataFrame({
+        "RevolvingUtilizationOfUnsecuredLines": [0.2, 0.4],
+        "age": [30, 45],
+        "NumberOfTime30_59DaysPastDueNotWorse": [0, 1],
+        "DebtRatio": [0.3, 0.1],
+        "MonthlyIncome": [5000.0, 6000.0],
+        "NumberOfOpenCreditLinesAndLoans": [12, 10],
+        "NumberOfTimes90DaysLate": [0, 1],
+        "NumberRealEstateLoansOrLines": [1, 2],
+        "NumberOfTime60_89DaysPastDueNotWorse": [0, 1],
+        "NumberOfDependents": [1, 2],
+        "SeriousDlqin2yrs": [0, 1],
+    })
+    df.to_csv(data_dir / "cs-training.csv", index=False)
+
+    monkeypatch.setattr("src.train.XGBoostProductionTrainer", lambda config: trainer)
+    monkeypatch.setattr("src.train.PROJECT_ROOT", tmp_path)
+
+    result = __import__("src.train", fromlist=["train_candidate"]).train_candidate(persist_local_artifacts=True)
+
+    assert result == {"run_id": "candidate-run", "version": "latest"}
+    trainer.train_and_compare.assert_called_once()
