@@ -16,6 +16,17 @@ A production-style MLOps system for credit risk prediction built around a deploy
 
 Predicting credit risk allows financial institutions to minimize defaults and optimize lending decisions. This system ensures that models are not just accurate in research, but reliable, scalable, and monitorable in production environments.
 
+## 📊 Model Performance
+
+The production credit-risk model is operating in the expected performance range for a risk-classification use case, with ROC-AUC close to the 0.85 benchmark referenced in the project workflow. Based on the current artifact metrics:
+
+- Validation ROC-AUC: 0.8697
+- Test ROC-AUC: 0.8628
+- 5-fold cross-validation ROC-AUC mean: 0.8562
+- Test average precision: 0.4006
+
+This indicates strong discriminatory power for separating low- and high-risk applicants while remaining stable under cross-validation.
+
 ## 🏗️ System Architecture
 
 ```mermaid

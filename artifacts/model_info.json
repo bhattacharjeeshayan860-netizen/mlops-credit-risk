@@ -1,8 +1,8 @@
 {
     "model_type": "XGBClassifier",
     "version": "0.1.0",
-    "trained_at": "2026-08-30 15:17:07",
-    "mlflow_run_id": "4e833e4b3fe94123b0013f75a9838255",
-    "roc_auc": 0.8627804897234731,
-    "average_precision": 0.4006142199853642
+    "trained_at": "2026-09-02 04:01:59",
+    "mlflow_run_id": "20d8d4aca60e4070a8f34031fc8cdac4",
+    "roc_auc": 0.8606269481927662,
+    "average_precision": 0.4010161964324624
 }

@@ -6,7 +6,11 @@ import os
 # Set MLflow tracking URI as environment variable BEFORE importing mlflow
 os.environ["MLFLOW_TRACKING_URI"] = "sqlite:///mlflow.db"
 
+import json
 import logging
+from datetime import datetime
+
+import joblib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -41,6 +45,7 @@ class XGBoostProductionTrainer:
         self.features = config["FEATURES"]
         self.primary_metric = config["PRIMARY_METRIC"]
         self.threshold = config["DELTA_THRESHOLD"]
+        self.persist_local_artifacts = bool(config.get("PERSIST_LOCAL_ARTIFACTS", False))
         
         mlflow.set_tracking_uri(config.get("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"))
         mlflow.set_experiment(config["EXPERIMENT_NAME"])
@@ -148,6 +153,21 @@ class XGBoostProductionTrainer:
                 "cv_std": cv_std
             }
 
+            if self.persist_local_artifacts:
+                ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+                model_info = {
+                    "model_type": type(model).__name__,
+                    "version": "0.1.0",
+                    "trained_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mlflow_run_id": run.info.run_id,
+                    "roc_auc": float(metrics[self.primary_metric]),
+                    "average_precision": float(average_precision_score(y_test, probs)),
+                }
+                joblib.dump(model, ARTIFACTS_DIR / "model.pkl")
+                joblib.dump(preprocessor, ARTIFACTS_DIR / "preprocessor.pkl")
+                with open(ARTIFACTS_DIR / "model_info.json", "w", encoding="utf-8") as file:
+                    json.dump(model_info, file, indent=4)
+
             mlflow.log_params(params)
             mlflow.log_metrics(metrics)
             mlflow.log_param("imbalance_ratio", ratio)
@@ -161,7 +181,6 @@ class XGBoostProductionTrainer:
                 skops_trusted_types=['xgboost.core.Booster', 'xgboost.sklearn.XGBClassifier']
             )
             
-            import joblib
             preprocessor_path = Path("temp_preprocessor.pkl")
             joblib.dump(preprocessor, preprocessor_path)
             mlflow.log_artifact(str(preprocessor_path), "preprocessor")
@@ -227,7 +246,8 @@ def train_candidate(persist_local_artifacts: bool = True) -> Dict[str, str]:
         "FEATURES": FEATURE_COLUMNS,
         "PRIMARY_METRIC": "auc",
         "DELTA_THRESHOLD": 0.005,
-        "MLFLOW_TRACKING_URI": "sqlite:///mlflow.db"
+        "MLFLOW_TRACKING_URI": "sqlite:///mlflow.db",
+        "PERSIST_LOCAL_ARTIFACTS": persist_local_artifacts,
     }
     data_path = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
     if not data_path.exists():
@@ -245,7 +265,8 @@ def main():
         "FEATURES": FEATURE_COLUMNS,
         "PRIMARY_METRIC": "auc",
         "DELTA_THRESHOLD": 0.005,
-        "MLFLOW_TRACKING_URI": MLFLOW_TRACKING_URI
+        "MLFLOW_TRACKING_URI": MLFLOW_TRACKING_URI,
+        "PERSIST_LOCAL_ARTIFACTS": True,
     }
     data_path = PROJECT_ROOT / "data" / "raw" / "cs-training.csv"
     if not data_path.exists():
